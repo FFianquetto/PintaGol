@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comunidad - Pinta Gol</title>
+  <link rel="stylesheet" href="css/comunidad.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="comunidad-container">
+    <canvas id="comunidad-canvas"></canvas>
+
+    <div id="comunidad-overlay">
+      <div id="comunidad-panel">
+        <h2 id="comunidad-title">COMUNIDAD</h2>
+        <p class="comunidad-subtitulo">Noticias</p>
+
+        <section id="noticias-list">
+          <article class="noticia">
+            <h3 class="noticia-titulo">Mundial 2026: sedes confirmadas en USA, México y Canadá</h3>
+            <p class="noticia-bajada">La FIFA dio a conocer el calendario oficial. El torneo se disputará en 16 ciudades de los tres países anfitriones entre junio y julio de 2026.</p>
+          </article>
+          <article class="noticia">
+            <h3 class="noticia-titulo">Argentina se mantiene líder del ranking FIFA</h3>
+            <p class="noticia-bajada">La Albiceleste encabeza la clasificación mundial tras su último título. Francia y Brasil completan el podio en la lista actualizada.</p>
+          </article>
+          <article class="noticia">
+            <h3 class="noticia-titulo">Pinta Gol supera el millón de jugadores</h3>
+            <p class="noticia-bajada">La comunidad global de Pinta Gol sigue creciendo. Jugadores de más de 50 países se suman cada semana para disputar partidas en línea.</p>
+          </article>
+        </section>
+
+        <button type="button" id="btn-volver">Volver al lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/comunidad.js"></script>
+</body>
+</html>

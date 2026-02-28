@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pinta Gol - Lobby</title>
+  <link rel="stylesheet" href="css/lobby.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="lobby-container">
+    <!-- Canvas WebGL (Three.js) -->
+    <canvas id="lobby-canvas"></canvas>
+
+    <!-- Overlay: título y botones -->
+    <div id="lobby-overlay">
+      <h1 id="game-title">
+        <span class="title-pinta">Pinta</span>
+        <span class="title-gol">Gol</span>
+      </h1>
+
+      <nav id="lobby-buttons">
+        <button type="button" class="lobby-btn btn-crear" data-action="crear-partida">Crear partida</button>
+        <button type="button" class="lobby-btn btn-buscar" data-action="buscar-partida">Buscar Partida</button>
+        <button type="button" class="lobby-btn btn-config" data-action="configuracion">Configuración</button>
+        <button type="button" class="lobby-btn btn-puntuaciones" data-action="puntuaciones">Puntuaciones</button>
+        <button type="button" class="lobby-btn btn-comunidad" data-action="comunidad">Comunidad</button>
+      </nav>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/lobby.js"></script>
+</body>
+</html>

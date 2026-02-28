@@ -1,0 +1,133 @@
+/* ===== Pantalla Puntuaciones - Pinta Gol ===== */
+/* Coherencia: mismo mapa de fondo, estructura de overlay y botón Volver */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Crimson Pro', Georgia, serif;
+}
+
+#puntuaciones-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0a0a0f;
+}
+
+#puntuaciones-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#puntuaciones-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+#puntuaciones-overlay > * {
+  pointer-events: auto;
+}
+
+/* ----- Panel azul (más oscuro que el océano) ----- */
+#puntuaciones-panel {
+  background: linear-gradient(180deg, #1a5a9e 0%, #0d4d8c 100%);
+  padding: 2rem 2.5rem 2rem;
+  border-radius: 24px;
+  border: 2px solid #d4a574;
+  min-width: 380px;
+  max-width: 90vw;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+#puntuaciones-title {
+  color: #b8f02e;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 1.2rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.06em;
+}
+
+/* ----- Tabla de puntuaciones ----- */
+#tabla-puntuaciones {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.2rem;
+}
+
+#tabla-puntuaciones thead th {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #dc2626;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 2px solid rgba(212, 165, 116, 0.6);
+}
+
+#tabla-puntuaciones .col-rango { width: 20%; }
+#tabla-puntuaciones .col-jugador { width: 55%; }
+#tabla-puntuaciones .col-puntos { width: 25%; text-align: right; }
+
+#tabla-puntuaciones tbody td {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.95);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+#tabla-puntuaciones tbody tr:last-child td {
+  border-bottom: none;
+}
+
+#tabla-puntuaciones tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#tabla-puntuaciones tbody td:nth-child(3) {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* ----- Botón Volver (mismo estilo que Configuración) ----- */
+#btn-volver {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+#btn-volver:hover {
+  background: #fff;
+  transform: scale(1.02);
+}
+
+#btn-volver:active {
+  transform: scale(0.98);
+}

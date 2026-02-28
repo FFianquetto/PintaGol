@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pausa - Pinta Gol</title>
+  <link rel="stylesheet" href="css/pausa.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="pausa-container">
+    <div id="pausa-canvas-wrap">
+      <canvas id="pausa-canvas"></canvas>
+    </div>
+
+    <div id="pausa-overlay">
+      <div id="pausa-banner">
+        <h2 id="pausa-title">PAUSA</h2>
+      </div>
+
+      <nav id="pausa-buttons">
+        <button type="button" class="pausa-btn pausa-continuar" data-accion="continuar">Continuar</button>
+        <button type="button" class="pausa-btn pausa-reiniciar" data-accion="reiniciar">Reiniciar</button>
+        <button type="button" class="pausa-btn pausa-salir" data-accion="salir">Salir</button>
+      </nav>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/pausa.js"></script>
+</body>
+</html>

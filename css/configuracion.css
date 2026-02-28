@@ -1,0 +1,175 @@
+/* ===== Pantalla Configuraciones - Pinta Gol ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Crimson Pro', Georgia, serif;
+}
+
+#config-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0a0a0f;
+}
+
+#config-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#config-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+#config-overlay > * {
+  pointer-events: auto;
+}
+
+/* ----- Panel de configuración (turquesa) ----- */
+#config-panel {
+  background: #20b2aa;
+  padding: 2rem 2.5rem 2.5rem;
+  border-radius: 0 0 24px 0;
+  min-width: 320px;
+  max-width: 90vw;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+#config-title {
+  color: #b8f02e;
+  font-size: 1.6rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 1.8rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.04em;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.config-row label {
+  color: #2d1f0e;
+  font-size: 1rem;
+  font-weight: 700;
+  min-width: 70px;
+}
+
+/* ----- Sliders (pista roja, relleno amarillo, thumb verde) ----- */
+.slider-wrap {
+  flex: 1;
+  position: relative;
+  height: 20px;
+  background: #c41e3a;
+  border-radius: 10px;
+  overflow: hidden;
+  --fill-width: 72%;
+}
+
+.slider-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--fill-width, 72%);
+  background: #ffd700;
+  border-radius: 10px 0 0 10px;
+  pointer-events: none;
+  transition: width 0.08s ease;
+}
+
+.config-slider {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.config-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 20px;
+  background: transparent;
+}
+
+.config-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #7cfc00;
+  border: 3px solid #228b22;
+  cursor: pointer;
+  margin-top: -4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.config-slider::-moz-range-track {
+  width: 100%;
+  height: 20px;
+  background: transparent;
+}
+
+.config-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #7cfc00;
+  border: 3px solid #228b22;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* ----- Botón Volver ----- */
+#btn-volver {
+  display: block;
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.6rem 1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+#btn-volver:hover {
+  background: #fff;
+  transform: scale(1.02);
+}
+
+#btn-volver:active {
+  transform: scale(0.98);
+}

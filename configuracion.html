@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuraciones - Pinta Gol</title>
+  <link rel="stylesheet" href="css/configuracion.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="config-container">
+    <canvas id="config-canvas"></canvas>
+
+    <div id="config-overlay">
+      <div id="config-panel">
+        <h2 id="config-title">CONFIGURACIONES</h2>
+
+        <div class="config-row">
+          <label for="slider-sonido">SONIDO</label>
+          <div class="slider-wrap">
+            <input type="range" id="slider-sonido" class="config-slider" min="0" max="100" value="72">
+          </div>
+        </div>
+        <div class="config-row">
+          <label for="slider-musica">MÚSICA</label>
+          <div class="slider-wrap">
+            <input type="range" id="slider-musica" class="config-slider" min="0" max="100" value="72">
+          </div>
+        </div>
+
+        <button type="button" id="btn-volver">Volver al lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/configuracion.js"></script>
+</body>
+</html>

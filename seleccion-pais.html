@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Selección de País - Pinta Gol</title>
+  <link rel="stylesheet" href="css/seleccion-pais.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="paises-container">
+    <canvas id="paises-canvas"></canvas>
+
+    <div id="paises-overlay">
+      <div id="paises-panel">
+        <h2 id="paises-title">SELECCIONA PAÍS</h2>
+
+        <div id="paises-grid">
+          <!-- 32 países Copa del Mundo + Aleatorio -->
+          <button type="button" class="pais-slot" data-pais="brasil">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/br.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Brasil</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="argentina">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/ar.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Argentina</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="alemania">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/de.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Alemania</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="francia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/fr.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Francia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="espana">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/es.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">España</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="italia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/it.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Italia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="inglaterra">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/gb.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Inglaterra</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="mexico">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/mx.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">México</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="japon">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/jp.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Japón</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="paises-bajos">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/nl.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Países Bajos</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="portugal">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/pt.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Portugal</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="uruguay">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/uy.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Uruguay</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="belgica">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/be.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Bélgica</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="croacia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/hr.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Croacia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="estados-unidos">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/us.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Estados Unidos</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="marruecos">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/ma.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Marruecos</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="suiza">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/ch.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Suiza</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="senegal">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/sn.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Senegal</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="polonia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/pl.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Polonia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="corea-del-sur">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/kr.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Corea del Sur</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="arabia-saudita">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/sa.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Arabia Saudita</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="ecuador">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/ec.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Ecuador</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="ghana">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/gh.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Ghana</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="iran">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/ir.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Irán</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="serbia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/rs.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Serbia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="tunez">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/tn.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Túnez</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="costa-rica">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/cr.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Costa Rica</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="canada">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/ca.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Canadá</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="camerun">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/cm.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Camerún</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="australia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/au.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Australia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="dinamarca">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/dk.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Dinamarca</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="colombia">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/co.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Colombia</span>
+          </button>
+          <button type="button" class="pais-slot" data-pais="qatar">
+            <span class="pais-bandera"><img src="https://flagcdn.com/w80/qa.png" alt="" width="64" height="48"></span>
+            <span class="pais-nombre">Qatar</span>
+          </button>
+          <button type="button" class="pais-slot pais-aleatorio" data-pais="aleatorio">
+            <span class="pais-bandera aleatorio-icono">???</span>
+            <span class="pais-nombre">Aleatorio</span>
+          </button>
+        </div>
+
+        <button type="button" id="btn-volver">Volver al lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/seleccion-pais.js"></script>
+</body>
+</html>

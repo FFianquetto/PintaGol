@@ -1,0 +1,158 @@
+/* ===== Lobby - Pinta Gol ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Permanent Marker', cursive, sans-serif;
+}
+
+#lobby-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0a0a0f;
+}
+
+#lobby-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#lobby-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#lobby-overlay > * {
+  pointer-events: auto;
+}
+
+/* ----- Título "Pinta Gol" ----- */
+#game-title {
+  position: absolute;
+  top: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  font-size: clamp(2.6rem, 6.5vw, 4.8rem);
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+  text-shadow:
+    3px 3px 0 rgba(255, 200, 0, 0.95),
+    -1px -1px 0 rgba(255, 200, 0, 0.75),
+    0 0 24px rgba(255, 220, 100, 0.5);
+  z-index: 10;
+  padding: 0.15em 0.2em;
+}
+
+.title-pinta {
+  color: #b8f02e;
+  display: block;
+  -webkit-text-stroke: 2px rgba(255, 200, 0, 0.8);
+  paint-order: stroke fill;
+}
+
+.title-gol {
+  color: #ffd000;
+  display: block;
+  -webkit-text-stroke: 2px rgba(184, 240, 46, 0.8);
+  paint-order: stroke fill;
+}
+
+/* ----- Botones tipo blob ----- */
+#lobby-buttons {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lobby-btn {
+  position: absolute;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: clamp(0.9rem, 1.9vw, 1.15rem);
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  padding: 0.65em 1.3em;
+  border-radius: 50%;
+  min-width: 124px;
+  min-height: 124px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.2;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.lobby-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  filter: brightness(1.15);
+}
+
+.lobby-btn:active {
+  transform: scale(0.98);
+}
+
+/* Posiciones aproximadas sobre el mapa (porcentajes) */
+.btn-crear {
+  background: linear-gradient(145deg, rgba(190, 100, 230, 0.85), rgba(150, 70, 200, 0.9));
+  top: 38%;
+  left: 22%;
+}
+
+.btn-buscar {
+  background: linear-gradient(145deg, rgba(230, 120, 60, 0.85), rgba(200, 90, 40, 0.9));
+  top: 42%;
+  left: 48%;
+}
+
+.btn-config {
+  background: linear-gradient(145deg, rgba(50, 50, 150, 0.85), rgba(30, 30, 120, 0.9));
+  top: 45%;
+  right: 18%;
+}
+
+.btn-puntuaciones {
+  background: linear-gradient(145deg, rgba(200, 50, 50, 0.85), rgba(160, 30, 30, 0.9));
+  bottom: 28%;
+  left: 28%;
+}
+
+.btn-comunidad {
+  background: linear-gradient(145deg, rgba(255, 200, 0, 0.85), rgba(230, 170, 0, 0.9));
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.btn-comunidad:hover {
+  transform: translateX(-50%) scale(1.08);
+}
+
+.btn-comunidad:active {
+  transform: translateX(-50%) scale(0.98);
+}
