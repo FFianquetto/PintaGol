@@ -1,14 +1,11 @@
 /**
  * Selección de País - Pinta Gol
- * 32 países Copa del Mundo + Aleatorio. Efecto recorrido 4s al elegir Aleatorio.
+ * 31 países Copa del Mundo.
  */
 (function () {
   'use strict';
 
   var scene, camera, renderer, mapPlane;
-  var DURACION_EFECTO_MS = 4000;
-  var NUM_PASOS = 80;
-  var NUM_PAISES = 32;
 
   function createMapTexture() {
     var w = 1024, h = 512;
@@ -104,64 +101,34 @@
 
   function getPaisSlots() {
     var slots = [];
-    document.querySelectorAll('.pais-slot:not(.pais-aleatorio)').forEach(function (el) {
+    document.querySelectorAll('.pais-slot').forEach(function (el) {
       slots.push(el);
     });
     return slots;
   }
 
-  function setDestacado(slots, index) {
-    slots.forEach(function (slot, i) {
-      if (i === index) {
-        slot.classList.add('pais-slot--recorriendo');
-        slot.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-      } else {
-        slot.classList.remove('pais-slot--recorriendo');
-      }
-    });
-  }
-
-  function quitarDestacado(slots) {
-    slots.forEach(function (slot) {
-      slot.classList.remove('pais-slot--recorriendo');
-    });
-  }
-
-  function iniciarEfectoAleatorio() {
-    var grid = document.getElementById('paises-grid');
+  function mostrarSeleccion(slotElegido, nombrePais) {
     var slots = getPaisSlots();
-    if (slots.length !== NUM_PAISES) return;
-
-    grid.classList.add('paises-grid--spinning');
-    var paso = 0;
-    var sumDelays = 0;
-    for (var i = 0; i < NUM_PASOS; i++) {
-      sumDelays += 30 + 0.5 * i;
+    slots.forEach(function (s) {
+      s.classList.remove('pais-slot--seleccionado');
+    });
+    if (slotElegido) {
+      slotElegido.classList.add('pais-slot--seleccionado');
+      slotElegido.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-    var factor = DURACION_EFECTO_MS / sumDelays;
-
-    function runStep() {
-      if (paso >= NUM_PASOS) {
-        var finalIndex = Math.floor(Math.random() * NUM_PAISES);
-        setDestacado(slots, finalIndex);
-        grid.classList.remove('paises-grid--spinning');
-        var paisElegido = slots[finalIndex].getAttribute('data-pais');
-        var nombreElegido = slots[finalIndex].querySelector('.pais-nombre');
-        if (nombreElegido) {
-          console.log('Aleatorio: ' + (nombreElegido.textContent || paisElegido));
-        }
-        setTimeout(function () {
-          quitarDestacado(slots);
-        }, 1500);
-        return;
-      }
-      setDestacado(slots, paso % NUM_PAISES);
-      paso += 1;
-      var delay = (30 + 0.5 * paso) * factor;
-      setTimeout(runStep, delay);
+    var msg = document.getElementById('pais-elegido-msg');
+    if (msg) {
+      msg.textContent = nombrePais ? 'País elegido: ' + nombrePais : '';
     }
+  }
 
-    runStep();
+  function limpiarSeleccion() {
+    var slots = getPaisSlots();
+    slots.forEach(function (s) {
+      s.classList.remove('pais-slot--seleccionado');
+    });
+    var msg = document.getElementById('pais-elegido-msg');
+    if (msg) msg.textContent = '';
   }
 
   function onPaisClick(ev) {
@@ -169,15 +136,9 @@
     var pais = btn && btn.getAttribute('data-pais');
     if (!pais) return;
 
-    if (pais === 'aleatorio') {
-      ev.preventDefault();
-      var grid = document.getElementById('paises-grid');
-      if (grid && grid.classList.contains('paises-grid--spinning')) return;
-      iniciarEfectoAleatorio();
-      return;
-    }
-
-    console.log('País seleccionado:', pais);
+    limpiarSeleccion();
+    var nombre = btn.querySelector('.pais-nombre');
+    mostrarSeleccion(btn, nombre ? nombre.textContent.trim() : pais);
   }
 
   function initButtons() {

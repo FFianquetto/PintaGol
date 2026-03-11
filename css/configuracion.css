@@ -1,4 +1,4 @@
-/* ===== Pantalla Configuraciones - Pinta Gol ===== */
+/* ===== Configuraciones - Pinta Gol ===== */
 * {
   margin: 0;
   padding: 0;
@@ -16,7 +16,7 @@ html, body {
   position: relative;
   width: 100%;
   height: 100%;
-  background: #0a0a0f;
+  background: #0c1222;
 }
 
 #config-canvas {
@@ -44,24 +44,26 @@ html, body {
   pointer-events: auto;
 }
 
-/* ----- Panel de configuración (turquesa) ----- */
 #config-panel {
-  background: #20b2aa;
+  background: linear-gradient(165deg, #1e3a5f 0%, #0f2744 100%);
   padding: 2rem 2.5rem 2.5rem;
-  border-radius: 0 0 24px 0;
+  border-radius: 20px;
   min-width: 320px;
   max-width: 90vw;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #config-title {
-  color: #b8f02e;
-  font-size: 1.6rem;
+  color: #86efac;
+  font-size: 1.5rem;
   font-weight: 600;
   text-align: center;
   margin-bottom: 1.8rem;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  letter-spacing: 0.04em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.06em;
 }
 
 .config-row {
@@ -72,19 +74,18 @@ html, body {
 }
 
 .config-row label {
-  color: #2d1f0e;
-  font-size: 1rem;
-  font-weight: 700;
-  min-width: 70px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+  font-weight: 600;
+  min-width: 72px;
 }
 
-/* ----- Sliders (pista roja, relleno amarillo, thumb verde) ----- */
 .slider-wrap {
   flex: 1;
   position: relative;
-  height: 20px;
-  background: #c41e3a;
-  border-radius: 10px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 11px;
   overflow: hidden;
   --fill-width: 72%;
 }
@@ -96,17 +97,17 @@ html, body {
   left: 0;
   height: 100%;
   width: var(--fill-width, 72%);
-  background: #ffd700;
-  border-radius: 10px 0 0 10px;
+  background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+  border-radius: 11px 0 0 11px;
   pointer-events: none;
-  transition: width 0.08s ease;
+  transition: width 0.1s ease;
 }
 
 .config-slider {
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 20px;
+  height: 22px;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
@@ -115,59 +116,65 @@ html, body {
 
 .config-slider::-webkit-slider-runnable-track {
   width: 100%;
-  height: 20px;
+  height: 22px;
   background: transparent;
 }
 
 .config-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: #7cfc00;
-  border: 3px solid #228b22;
+  background: linear-gradient(145deg, #fde047 0%, #eab308 100%);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  margin-top: -4px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  margin-top: -2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease;
+}
+
+.config-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.08);
 }
 
 .config-slider::-moz-range-track {
   width: 100%;
-  height: 20px;
+  height: 22px;
   background: transparent;
 }
 
 .config-slider::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: #7cfc00;
-  border: 3px solid #228b22;
+  background: linear-gradient(145deg, #fde047 0%, #eab308 100%);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-/* ----- Botón Volver ----- */
 #btn-volver {
   display: block;
   width: 100%;
   margin-top: 1.5rem;
-  padding: 0.6rem 1rem;
+  padding: 0.65rem 1rem;
   font-family: inherit;
   font-size: 0.95rem;
   font-weight: 600;
-  color: #1a1a1a;
-  background: rgba(255, 255, 255, 0.9);
+  color: #0c1222;
+  background: linear-gradient(180deg, #fde047 0%, #eab308 100%);
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 #btn-volver:hover {
-  background: #fff;
   transform: scale(1.02);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(234, 179, 8, 0.35);
 }
 
 #btn-volver:active {

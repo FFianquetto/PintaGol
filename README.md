@@ -11,35 +11,44 @@ Pantalla de lobby del videojuego en línea **Pinta Gol**, desarrollada con **HTM
 
 ## Cómo ejecutar
 
-1. Sirve el proyecto con un servidor local (Chrome puede bloquear WebGL con `file://`).
-   - Con Node: `npx serve .` o `npx http-server .`
-   - Con Python: `python -m http.server 8080`
-2. Abre en Chrome la URL que indique el servidor (ej. `http://localhost:8080`).
+**Comando recomendado (Node):**
+```bash
+npx serve .
+```
+Luego abre en el navegador la URL que muestre (por ejemplo `http://localhost:3000`).  
+*(Chrome puede bloquear WebGL con `file://`; hace falta servidor local.)*
+
+**Alternativas:**
+- `npx http-server .` — sirve en otro puerto (p. ej. 8080).
+- `python -m http.server 8080` — si usas Python 3.
 
 ## Estructura
 
 ```
 Avance1/
-├── index.html           # Página del lobby
-├── configuracion.html   # Pantalla de configuraciones
-├── puntuaciones.html    # Pantalla de puntuaciones / leaderboard
-├── seleccion-pais.html  # Selección de país (Buscar partida)
-├── comunidad.html       # Comunidad / noticias
-├── pausa.html            # Menú de pausa (Continuar, Reiniciar, Salir)
+├── index.html
+├── configuracion.html
+├── puntuaciones.html
+├── seleccion-pais.html
+├── comunidad.html
+├── pausa.html
+├── assets/
+│   ├── models/
+│   ├── textures/
+│   ├── audio/
+│   ├── images/
+│   ├── items/        # Ítems especiales (mín. 3)
+│   ├── scenarios/   # 3 escenarios distintos
+│   └── particles/   # Texturas para partículas
+├── backend/             # Backend propio (opcional). Si las APIs son externas, solo se usa js/api/
 ├── css/
-│   ├── lobby.css         # Estilos del lobby
-│   ├── configuracion.css # Estilos del panel de configuración
-│   ├── puntuaciones.css  # Estilos del panel de puntuaciones
-│   ├── seleccion-pais.css # Estilos del panel de selección de país
-│   ├── comunidad.css     # Estilos del panel de comunidad / noticias
-│   └── pausa.css         # Estilos del menú de pausa
+│   └── ...
 ├── js/
-│   ├── lobby.js          # Escena Three.js y lógica del lobby
-│   ├── configuracion.js  # Escena Three.js y sliders de sonido/música
-│   ├── puntuaciones.js   # Escena Three.js del mapa (puntuaciones)
-│   ├── seleccion-pais.js # Escena Three.js y grid de banderas
-│   ├── comunidad.js      # Escena Three.js (comunidad / noticias)
-│   └── pausa.js          # Escena Three.js y menú de pausa
+│   ├── api/             # Cliente REST API (base URL, endpoints). Estilo Retrofit: centralizar llamadas cuando tengas las APIs
+│   ├── scenes/
+│   ├── network/
+│   └── ...
+├── REQUISITOS.md     # Análisis de cumplimiento de la rúbrica (pantallas, colisiones, IA, multijugador, etc.)
 └── README.md
 ```
 

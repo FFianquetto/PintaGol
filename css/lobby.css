@@ -1,4 +1,5 @@
 /* ===== Lobby - Pinta Gol ===== */
+/* Paleta: verde campo (#166534), dorado (#eab308), blanco/crema, azul océano (#0ea5e9) */
 * {
   margin: 0;
   padding: 0;
@@ -16,7 +17,7 @@ html, body {
   position: relative;
   width: 100%;
   height: 100%;
-  background: #0a0a0f;
+  background: #0c1222;
 }
 
 #lobby-canvas {
@@ -35,6 +36,7 @@ html, body {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(12, 18, 34, 0.25) 100%);
 }
 
 #lobby-overlay > * {
@@ -50,31 +52,36 @@ html, body {
   text-align: center;
   white-space: nowrap;
   font-size: clamp(2.6rem, 6.5vw, 4.8rem);
-  line-height: 1.1;
-  letter-spacing: 0.03em;
-  text-shadow:
-    3px 3px 0 rgba(255, 200, 0, 0.95),
-    -1px -1px 0 rgba(255, 200, 0, 0.75),
-    0 0 24px rgba(255, 220, 100, 0.5);
+  line-height: 1.15;
+  letter-spacing: 0.04em;
   z-index: 10;
-  padding: 0.15em 0.2em;
+  padding: 0.2em 0.25em;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
 .title-pinta {
-  color: #b8f02e;
+  color: #86efac;
   display: block;
-  -webkit-text-stroke: 2px rgba(255, 200, 0, 0.8);
+  text-shadow:
+    3px 3px 0 rgba(234, 179, 8, 0.9),
+    -1px -1px 0 rgba(234, 179, 8, 0.5),
+    0 0 32px rgba(134, 239, 172, 0.35);
+  -webkit-text-stroke: 2px rgba(22, 101, 52, 0.9);
   paint-order: stroke fill;
 }
 
 .title-gol {
-  color: #ffd000;
+  color: #fde047;
   display: block;
-  -webkit-text-stroke: 2px rgba(184, 240, 46, 0.8);
+  text-shadow:
+    3px 3px 0 rgba(22, 101, 52, 0.85),
+    -1px -1px 0 rgba(22, 101, 52, 0.5),
+    0 0 28px rgba(253, 224, 71, 0.4);
+  -webkit-text-stroke: 2px rgba(22, 101, 52, 0.85);
   paint-order: stroke fill;
 }
 
-/* ----- Botones tipo blob ----- */
+/* ----- Botones ----- */
 #lobby-buttons {
   position: absolute;
   top: 0;
@@ -88,62 +95,66 @@ html, body {
   border: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: clamp(0.9rem, 1.9vw, 1.15rem);
+  font-size: clamp(0.85rem, 1.8vw, 1.1rem);
   font-weight: 600;
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  padding: 0.65em 1.3em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  padding: 0.7em 1.4em;
   border-radius: 50%;
-  min-width: 124px;
-  min-height: 124px;
+  min-width: 120px;
+  min-height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  line-height: 1.2;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  line-height: 1.25;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease;
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    0 10px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.15);
 }
 
 .lobby-btn:hover {
   transform: scale(1.08);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  filter: brightness(1.15);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  filter: brightness(1.12);
 }
 
 .lobby-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
-/* Posiciones aproximadas sobre el mapa (porcentajes) */
+/* Posiciones sobre el mapa */
 .btn-crear {
-  background: linear-gradient(145deg, rgba(190, 100, 230, 0.85), rgba(150, 70, 200, 0.9));
+  background: linear-gradient(155deg, #166534 0%, #15803d 50%, #16a34a 100%);
   top: 38%;
   left: 22%;
 }
 
 .btn-buscar {
-  background: linear-gradient(145deg, rgba(230, 120, 60, 0.85), rgba(200, 90, 40, 0.9));
+  background: linear-gradient(155deg, #c2410c 0%, #ea580c 50%, #f97316 100%);
   top: 42%;
   left: 48%;
 }
 
 .btn-config {
-  background: linear-gradient(145deg, rgba(50, 50, 150, 0.85), rgba(30, 30, 120, 0.9));
+  background: linear-gradient(155deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
   top: 45%;
   right: 18%;
 }
 
 .btn-puntuaciones {
-  background: linear-gradient(145deg, rgba(200, 50, 50, 0.85), rgba(160, 30, 30, 0.9));
+  background: linear-gradient(155deg, #b91c1c 0%, #dc2626 50%, #ef4444 100%);
   bottom: 28%;
   left: 28%;
 }
 
 .btn-comunidad {
-  background: linear-gradient(145deg, rgba(255, 200, 0, 0.85), rgba(230, 170, 0, 0.9));
+  background: linear-gradient(155deg, #a16207 0%, #ca8a04 50%, #eab308 100%);
   bottom: 22%;
   left: 50%;
   transform: translateX(-50%);
@@ -154,5 +165,5 @@ html, body {
 }
 
 .btn-comunidad:active {
-  transform: translateX(-50%) scale(0.98);
+  transform: translateX(-50%) scale(0.97);
 }
