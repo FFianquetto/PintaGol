@@ -1,0 +1,95 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Crimson Pro', Georgia, serif;
+  background: #08101f;
+}
+
+#multiplayer-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#multiplayer-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#multiplayer-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(4, 10, 21, 0.2), rgba(4, 10, 21, 0.65));
+  pointer-events: none;
+}
+
+#multiplayer-overlay > * {
+  pointer-events: auto;
+}
+
+.overlay-topbar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.hud-group {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.status-pill {
+  align-self: flex-start;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  color: #dcfce7;
+  background: rgba(22, 101, 52, 0.78);
+  border: 1px solid rgba(187, 247, 208, 0.4);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.hud-pill,
+#multiplayer-country,
+#multiplayer-player {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(8, 15, 29, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+#multiplayer-country {
+  color: #86efac;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+#multiplayer-player {
+  color: #f8fafc;
+  font-size: 0.98rem;
+  font-weight: 700;
+}

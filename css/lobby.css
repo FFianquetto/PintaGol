@@ -95,14 +95,14 @@ html, body {
   border: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: clamp(0.85rem, 1.8vw, 1.1rem);
+  font-size: clamp(0.8rem, 1.35vw, 1rem);
   font-weight: 600;
   color: #fff;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-  padding: 0.7em 1.4em;
+  padding: 0.55em 1.05em;
   border-radius: 50%;
-  min-width: 120px;
-  min-height: 120px;
+  min-width: 96px;
+  min-height: 96px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -131,32 +131,32 @@ html, body {
 /* Posiciones sobre el mapa */
 .btn-crear {
   background: linear-gradient(155deg, #166534 0%, #15803d 50%, #16a34a 100%);
-  top: 38%;
-  left: 22%;
+  top: 36%;
+  left: 18%;
 }
 
 .btn-buscar {
   background: linear-gradient(155deg, #c2410c 0%, #ea580c 50%, #f97316 100%);
   top: 42%;
-  left: 48%;
+  left: 41%;
 }
 
 .btn-config {
   background: linear-gradient(155deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
-  top: 45%;
-  right: 18%;
+  top: 35%;
+  right: 16%;
 }
 
 .btn-puntuaciones {
   background: linear-gradient(155deg, #b91c1c 0%, #dc2626 50%, #ef4444 100%);
-  bottom: 28%;
-  left: 28%;
+  bottom: 18%;
+  left: 24%;
 }
 
 .btn-comunidad {
   background: linear-gradient(155deg, #a16207 0%, #ca8a04 50%, #eab308 100%);
-  bottom: 22%;
-  left: 50%;
+  bottom: 18%;
+  left: 58%;
   transform: translateX(-50%);
 }
 

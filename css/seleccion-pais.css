@@ -68,6 +68,40 @@ html, body {
   letter-spacing: 0.04em;
 }
 
+.paises-subtitle {
+  color: rgba(255, 255, 255, 0.82);
+  text-align: center;
+  font-size: 0.98rem;
+  margin-bottom: 0.85rem;
+}
+
+.player-name-wrap {
+  margin-bottom: 0.9rem;
+}
+
+.player-name-wrap label {
+  display: block;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+#player-name-input {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(5, 14, 28, 0.5);
+  color: #f8fafc;
+  font: inherit;
+}
+
+#player-name-input:focus {
+  outline: none;
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgba(134, 239, 172, 0.2);
+}
+
 .pais-elegido-msg {
   text-align: center;
   font-size: 1rem;
@@ -148,6 +182,7 @@ html, body {
   text-align: center;
 }
 
+#btn-buscar-partida,
 #btn-volver {
   display: block;
   width: 100%;
@@ -164,12 +199,34 @@ html, body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
+#btn-buscar-partida {
+  margin-bottom: 0.75rem;
+  color: #eff6ff;
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+}
+
+#btn-buscar-partida:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: grayscale(0.15);
+}
+
+#btn-buscar-partida:not(:disabled):hover,
 #btn-volver:hover {
   transform: scale(1.02);
   filter: brightness(1.08);
+}
+
+#btn-buscar-partida:not(:disabled):hover {
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.3);
+}
+
+#btn-volver:hover {
   box-shadow: 0 6px 20px rgba(234, 179, 8, 0.35);
 }
 
+#btn-buscar-partida:active,
 #btn-volver:active {
   transform: scale(0.98);
 }
+

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cargando Partida - Pinta Gol</title>
+  <link rel="stylesheet" href="css/carga-partida.css">
+</head>
+<body>
+  <main class="loading-screen">
+    <section class="matchmaking-card" role="status" aria-live="polite">
+      <div class="matchmaking-spinner"></div>
+      <h1 id="matchmaking-title">Buscando partida...</h1>
+      <p id="matchmaking-text">Emparejando jugadores en el lobby multijugador.</p>
+      <p id="matchmaking-player" class="matchmaking-country">Jugador:</p>
+      <p id="matchmaking-country" class="matchmaking-country">País seleccionado:</p>
+      <p id="matchmaking-count" class="matchmaking-count">0 / 4 jugadores conectados</p>
+      <div id="matchmaking-users" class="matchmaking-users"></div>
+      <button type="button" id="btn-cancelar-busqueda" class="cancel-btn">Cancelar búsqueda</button>
+    </section>
+  </main>
+
+  <script src="js/multiplayer/store.js"></script>
+  <script src="js/multiplayer/matchmaking.js"></script>
+  <script src="js/carga-partida.js"></script>
+</body>
+</html>

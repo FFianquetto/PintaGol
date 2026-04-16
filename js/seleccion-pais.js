@@ -6,6 +6,8 @@
   'use strict';
 
   var scene, camera, renderer, mapPlane;
+  var selectedCountry = null;
+  var SELECTED_PLAYER_KEY = 'pintagol_selected_player';
 
   function createMapTexture() {
     var w = 1024, h = 512;
@@ -138,14 +140,73 @@
 
     limpiarSeleccion();
     var nombre = btn.querySelector('.pais-nombre');
-    mostrarSeleccion(btn, nombre ? nombre.textContent.trim() : pais);
+    nombre = nombre ? nombre.textContent.trim() : pais;
+    mostrarSeleccion(btn, nombre);
+    selectedCountry = { key: pais, label: nombre };
+    persistSelection();
+    setBuscarPartidaEnabled(canSearch());
+  }
+
+  function setSlotsDisabled(disabled) {
+    document.querySelectorAll('.pais-slot').forEach(function (slot) {
+      slot.disabled = !!disabled;
+      slot.style.opacity = disabled ? '0.65' : '';
+      slot.style.pointerEvents = disabled ? 'none' : '';
+    });
+  }
+
+  function setBuscarPartidaEnabled(enabled) {
+    var btnBuscar = document.getElementById('btn-buscar-partida');
+    if (btnBuscar) {
+      btnBuscar.disabled = !enabled;
+    }
+  }
+
+  function getPlayerName() {
+    var input = document.getElementById('player-name-input');
+    return input ? input.value.trim() : '';
+  }
+
+  function canSearch() {
+    return !!(selectedCountry && getPlayerName());
+  }
+
+  function persistSelection() {
+    if (!selectedCountry) return;
+    var payload = {
+      label: selectedCountry.label,
+      key: selectedCountry.key,
+      name: getPlayerName()
+    };
+    window.sessionStorage.setItem(SELECTED_PLAYER_KEY, JSON.stringify(payload));
   }
 
   function initButtons() {
     var btnVolver = document.getElementById('btn-volver');
+    var btnBuscar = document.getElementById('btn-buscar-partida');
     if (btnVolver) {
       btnVolver.addEventListener('click', function () {
         window.location.href = 'index.html';
+      });
+    }
+
+    if (btnBuscar) {
+      btnBuscar.addEventListener('click', function () {
+        var playerName = getPlayerName();
+        if (!selectedCountry || !playerName) return;
+        persistSelection();
+        window.location.href =
+          'carga-partida?pais=' + encodeURIComponent(selectedCountry.label) +
+          '&countryKey=' + encodeURIComponent(selectedCountry.key) +
+          '&playerName=' + encodeURIComponent(playerName);
+      });
+    }
+
+    var nameInput = document.getElementById('player-name-input');
+    if (nameInput) {
+      nameInput.addEventListener('input', function () {
+        persistSelection();
+        setBuscarPartidaEnabled(canSearch());
       });
     }
 
@@ -157,6 +218,21 @@
   function init() {
     initScene();
     initButtons();
+    try {
+      var cached = JSON.parse(window.sessionStorage.getItem(SELECTED_PLAYER_KEY) || 'null');
+      if (cached && cached.key && cached.label) {
+        selectedCountry = { key: cached.key, label: cached.label };
+        var input = document.getElementById('player-name-input');
+        if (input && cached.name) {
+          input.value = cached.name;
+        }
+        setBuscarPartidaEnabled(canSearch());
+        return;
+      }
+    } catch (error) {
+      // Ignorar sesión inválida y continuar normal.
+    }
+    setBuscarPartidaEnabled(false);
   }
 
   if (document.readyState === 'loading') {
