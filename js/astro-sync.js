@@ -12,7 +12,7 @@ import {
 const FBX_URLS = ["assets/models/astro/astronout.fbx", "/assets/models/astro/astronout.fbx"];
 const PNG_URLS = ["assets/models/astro/astronout.png", "/assets/models/astro/astronout.png"];
 
-/** Mismas bases que multijugador (assets.js) para encontrar gun1. */
+/** Mismas bases que multijugador (assets.js) para encontrar gun1 / gun2. */
 const MODEL_BASES = ["assets/models/", "/assets/models/", "../assets/models/"];
 
 const ASTRO_BORDE = 2.45;
@@ -22,8 +22,10 @@ const camSegui = { dist: 10.5, alto: 3.6, suav: 0.1 };
 const ASTRO_SCALE = 0.02;
 /** Encoge el astronauta (el arma usa la misma escala visual). */
 const WORLD_GROUP_SCALE = 0.52;
-/** Posición del arma en coordenadas de mundo (independiente del astronauta; solo IJKO la cambia). */
+/** Posición mundo del arma 1 (IJKO). */
 const gunWorld = { x: 1.45, y: 0.78, z: 0.42 };
+/** Posición mundo del arma 2 (CVBN), a la izquierda respecto al 1. */
+const gun2World = { x: -1.35, y: 0.78, z: 0.42 };
 const GUN_NUDGE = 0.028;
 const GUN_ARENA = 4.2;
 
@@ -89,11 +91,14 @@ scene.add(new THREE.GridHelper(24, 24, 0x475569, 0x1e293b));
 const wander = { x: 0, z: 0, lastRot: Math.PI };
 const keys = { w: false, a: false, s: false, d: false };
 const keysGun = { i: false, j: false, k: false, o: false };
+const keysGun2 = { c: false, v: false, b: false, n: false };
 let aplicandoRemoto = false;
 /** Solo astronauta (WASD). @type {THREE.Group | null} */
 let astroRoot = null;
-/** Arma en la escena (IJKO); no es hija del astronauta. @type {THREE.Object3D | null} */
+/** Arma 1 (IJKO); no es hija del astronauta. @type {THREE.Object3D | null} */
 let gunRoot = null;
+/** Arma 2 (CVBN). @type {THREE.Object3D | null} */
+let gun2Root = null;
 
 function applyAstroBlue(obj) {
   const base = new THREE.Color(0x2f6fe0);
@@ -220,6 +225,9 @@ function sendPose() {
   if (gunRoot) {
     msg.gunWorld = { x: gunWorld.x, y: gunWorld.y, z: gunWorld.z };
   }
+  if (gun2Root) {
+    msg.gun2World = { x: gun2World.x, y: gun2World.y, z: gun2World.z };
+  }
   enviarVista(msg);
 }
 
@@ -247,6 +255,13 @@ function manejarRemoto(d) {
     if (typeof gw.y === "number" && isFinite(gw.y)) gunWorld.y = gw.y;
     if (typeof gw.z === "number" && isFinite(gw.z)) gunWorld.z = gw.z;
     gunRoot.position.set(gunWorld.x, gunWorld.y, gunWorld.z);
+  }
+  const g2 = d.gun2World;
+  if (g2 && typeof g2 === "object" && gun2Root) {
+    if (typeof g2.x === "number" && isFinite(g2.x)) gun2World.x = g2.x;
+    if (typeof g2.y === "number" && isFinite(g2.y)) gun2World.y = g2.y;
+    if (typeof g2.z === "number" && isFinite(g2.z)) gun2World.z = g2.z;
+    gun2Root.position.set(gun2World.x, gun2World.y, gun2World.z);
   }
   aplicandoRemoto = false;
 }
@@ -288,6 +303,22 @@ function bindKeys() {
         keysGun.o = true;
         e.preventDefault();
       }
+      if (c === "KeyC") {
+        keysGun2.c = true;
+        e.preventDefault();
+      }
+      if (c === "KeyV") {
+        keysGun2.v = true;
+        e.preventDefault();
+      }
+      if (c === "KeyB") {
+        keysGun2.b = true;
+        e.preventDefault();
+      }
+      if (c === "KeyN") {
+        keysGun2.n = true;
+        e.preventDefault();
+      }
     },
     true
   );
@@ -303,12 +334,17 @@ function bindKeys() {
       if (c === "KeyJ") keysGun.j = false;
       if (c === "KeyK") keysGun.k = false;
       if (c === "KeyO") keysGun.o = false;
+      if (c === "KeyC") keysGun2.c = false;
+      if (c === "KeyV") keysGun2.v = false;
+      if (c === "KeyB") keysGun2.b = false;
+      if (c === "KeyN") keysGun2.n = false;
     },
     true
   );
   window.addEventListener("blur", () => {
     keys.w = keys.a = keys.s = keys.d = false;
     keysGun.i = keysGun.j = keysGun.k = keysGun.o = false;
+    keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;
   });
 }
 
@@ -362,6 +398,22 @@ function tickMovement() {
     gunRoot.position.set(gunWorld.x, gunWorld.y + bobY, gunWorld.z);
   }
 
+  if (gun2Root) {
+    if (!aplicandoRemoto) {
+      if (keysGun2.v) gun2World.z -= GUN_NUDGE;
+      if (keysGun2.b) gun2World.z += GUN_NUDGE;
+      if (keysGun2.c) gun2World.x -= GUN_NUDGE;
+      if (keysGun2.n) gun2World.x += GUN_NUDGE;
+    }
+    gun2World.x = Math.max(-GUN_ARENA, Math.min(GUN_ARENA, gun2World.x));
+    gun2World.z = Math.max(-GUN_ARENA, Math.min(GUN_ARENA, gun2World.z));
+    gun2World.y = Math.max(0.15, Math.min(2.2, gun2World.y));
+
+    const bob2 = Math.cos(t * 8 + 1.1) * 0.008;
+    gun2Root.rotation.z = -0.22 + Math.sin(t * 8 + 1.1) * 0.02;
+    gun2Root.position.set(gun2World.x, gun2World.y + bob2, gun2World.z);
+  }
+
   if (!aplicandoRemoto) {
     sendPose();
   }
@@ -403,6 +455,35 @@ function setupGunMesh(gun, gunTex) {
   gun.position.set(gunWorld.x, gunWorld.y, gunWorld.z);
 }
 
+function loadGun2AndPlace(astroGroup, gun1) {
+  loadTextureFirst(
+    pathsFor("gun2/gun2.png"),
+    (gunTex) => {
+      prepTex(gunTex);
+      loadFbxFirst(
+        pathsFor("gun2/gun2.fbx"),
+        (gun2) => {
+          setupGunMesh(gun2, gunTex);
+          gun2.name = "weapon-gun2";
+          placeInScene(astroGroup, gun1, gun2);
+        },
+        () => placeInScene(astroGroup, gun1, null)
+      );
+    },
+    () => {
+      loadFbxFirst(
+        pathsFor("gun2/gun2.fbx"),
+        (gun2) => {
+          setupGunMesh(gun2, null);
+          gun2.name = "weapon-gun2";
+          placeInScene(astroGroup, gun1, gun2);
+        },
+        () => placeInScene(astroGroup, gun1, null)
+      );
+    }
+  );
+}
+
 function loadGunAndFinish(astroGroup) {
   loadTextureFirst(
     pathsFor("gun1/gun1.png"),
@@ -412,9 +493,10 @@ function loadGunAndFinish(astroGroup) {
         pathsFor("gun1/gun1.fbx"),
         (gun) => {
           setupGunMesh(gun, gunTex);
-          placeInScene(astroGroup, gun);
+          gun.name = "weapon-gun1";
+          loadGun2AndPlace(astroGroup, gun);
         },
-        () => placeInScene(astroGroup, null)
+        () => loadGun2AndPlace(astroGroup, null)
       );
     },
     () => {
@@ -422,9 +504,10 @@ function loadGunAndFinish(astroGroup) {
         pathsFor("gun1/gun1.fbx"),
         (gun) => {
           setupGunMesh(gun, null);
-          placeInScene(astroGroup, gun);
+          gun.name = "weapon-gun1";
+          loadGun2AndPlace(astroGroup, gun);
         },
-        () => placeInScene(astroGroup, null)
+        () => loadGun2AndPlace(astroGroup, null)
       );
     }
   );
@@ -437,7 +520,7 @@ function loadFbxWithFallback(index) {
   }
   const url = FBX_URLS[index];
   const loader = new FBXLoader();
-  setStatus("Cargando astronauta y arma…", null);
+  setStatus("Cargando astronauta y armas (gun1, gun2)…", null);
   loader.load(
     url,
     (obj) => {
@@ -452,7 +535,7 @@ function loadFbxWithFallback(index) {
   );
 }
 
-function placeInScene(astroGroup, gun) {
+function placeInScene(astroGroup, gun, gun2) {
   if (astroColocado) return;
   astroColocado = true;
   astroGroup.scale.setScalar(WORLD_GROUP_SCALE);
@@ -463,7 +546,12 @@ function placeInScene(astroGroup, gun) {
     scene.add(gun);
     gun.position.set(gunWorld.x, gunWorld.y, gunWorld.z);
   }
-  setStatus("Listo. WASD: astronauta · IJKO: arma (posición independiente) · sync.", true);
+  if (gun2) {
+    gun2Root = gun2;
+    scene.add(gun2);
+    gun2.position.set(gun2World.x, gun2World.y, gun2World.z);
+  }
+  setStatus("Listo. WASD · IJKO (arma 1) · CVBN (arma 2) · sync.", true);
   queueMicrotask(() => {
     enviarVista({ tipo: "pedirSync" });
     if (getVentanaId() !== "2") {

@@ -200,6 +200,44 @@
     return group;
   }
 
+  function attachWeapon2(hero) {
+    loadTextureFromCandidates(
+      buildCandidatePaths('gun2/gun2.png'),
+      function (gunTexture) {
+        prepareTextureLikeModelo(gunTexture);
+        loadFbxFromCandidates(
+          buildCandidatePaths('gun2/gun2.fbx'),
+          function (gun2) {
+            configureModelMaterials(gun2, gunTexture);
+            gun2.scale.setScalar(0.018);
+            gun2.position.set(-0.58, 1.52, 0.92);
+            gun2.rotation.set(0.08, Math.PI / 2, -0.22);
+            gun2.name = 'weapon-model-gun2';
+            hero.add(gun2);
+          },
+          function (error) {
+            console.error('No se pudo cargar gun2.fbx', error);
+          }
+        );
+      },
+      function (error) {
+        console.error('No se pudo cargar gun2.png', error);
+        loadFbxFromCandidates(
+          buildCandidatePaths('gun2/gun2.fbx'),
+          function (gun2) {
+            configureModelMaterials(gun2, null);
+            gun2.scale.setScalar(0.018);
+            gun2.position.set(-0.58, 1.52, 0.92);
+            gun2.rotation.set(0.08, Math.PI / 2, -0.22);
+            gun2.name = 'weapon-model-gun2';
+            hero.add(gun2);
+          },
+          function () {}
+        );
+      }
+    );
+  }
+
   function attachWeapon(hero) {
     loadTextureFromCandidates(
       buildCandidatePaths('gun1/gun1.png'),
@@ -214,14 +252,31 @@
             gun.rotation.set(0.08, Math.PI / 2, -0.22);
             gun.name = 'weapon-model';
             hero.add(gun);
+            attachWeapon2(hero);
           },
           function (error) {
             console.error('No se pudo cargar gun1.fbx', error);
+            attachWeapon2(hero);
           }
         );
       },
       function (error) {
         console.error('No se pudo cargar gun1.png', error);
+        loadFbxFromCandidates(
+          buildCandidatePaths('gun1/gun1.fbx'),
+          function (gun) {
+            configureModelMaterials(gun, null);
+            gun.scale.setScalar(0.018);
+            gun.position.set(0.58, 1.52, 0.92);
+            gun.rotation.set(0.08, Math.PI / 2, -0.22);
+            gun.name = 'weapon-model';
+            hero.add(gun);
+            attachWeapon2(hero);
+          },
+          function () {
+            attachWeapon2(hero);
+          }
+        );
       }
     );
   }
@@ -284,7 +339,7 @@
   }
 
   /**
-   * Mismo astronauta + gun1 que en astro-sync (rutas assets/models/astro y gun1),
+   * Mismo astronauta + gun1 + gun2 que en astro-sync,
    * como referencia en el mapa (sustituye la caja demo anterior).
    */
   function loadMultijugadorShowcase(scene, onStatus) {
@@ -301,7 +356,7 @@
     group.position.set(0, -1.2, 0);
     scene.add(group);
     if (typeof onStatus === 'function') {
-      onStatus('Cargando astronauta y arma 2 (como en Modelos)…');
+      onStatus('Cargando astronauta y armas (gun1, gun2)…');
     }
     loadHeroModel(group);
   }
