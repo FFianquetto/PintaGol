@@ -11,7 +11,7 @@
 </head>
 <body>
   <div id="multiplayer-container">
-    <canvas id="multiplayer-canvas"></canvas>
+    <canvas id="multiplayer-canvas" tabindex="0" role="application" aria-label="Juego: usa WASD para mover al astronauta"></canvas>
 
     <div id="multiplayer-overlay">
       <div class="overlay-topbar">
@@ -25,7 +25,10 @@
   </div>
 
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/libs/fflate.min.js"></script>
   <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/FBXLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/MTLLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
   <script src="js/multiplayer/store.js"></script>
   <script src="js/multiplayer/assets.js"></script>
   <script src="js/multiplayer/game-scene.js"></script>

@@ -9,7 +9,8 @@
     var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     var heroesById = {};
 
-    scene.background = new THREE.Color(0x08101f);
+    // Mismo fondo base que en modelos.html (galería)
+    scene.background = new THREE.Color(0x0f172a);
     camera.position.set(0, 1.3, 7.5);
     camera.lookAt(0, 1.2, 0);
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -17,15 +18,17 @@
 
     var floor = new THREE.Mesh(
       new THREE.PlaneGeometry(18, 12, 1, 1),
-      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9, metalness: 0.05 })
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.95, metalness: 0.02 })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -1.45;
     scene.add(floor);
 
-    var grid = new THREE.GridHelper(18, 18, 0x3b82f6, 0x1e293b);
+    var grid = new THREE.GridHelper(18, 18, 0x475569, 0x1e293b);
     grid.position.y = -1.43;
     scene.add(grid);
+    // La carga del mapa se ejecuta desde js/multijugador.js para asegurar
+    // que se haga en la ruta final de la pantalla multijugador.
     scene.add(new THREE.AmbientLight(0xffffff, 0.95));
 
     var keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -36,9 +39,17 @@
     rimLight.position.set(-5, 3, -2);
     scene.add(rimLight);
 
+    function asFiniteNumber(value, fallback) {
+      return typeof value === 'number' && isFinite(value) ? value : fallback;
+    }
+
     function applyHeroTransform(heroGroup, player, elapsed) {
-      heroGroup.position.set(player.x, -1.2 + (player.y || 0) + Math.sin(elapsed * 2 + player.x) * 0.04, player.z);
-      heroGroup.rotation.y = typeof player.rotationY === 'number' ? player.rotationY : Math.PI;
+      var x = asFiniteNumber(player && player.x, 0);
+      var y = asFiniteNumber(player && player.y, 0);
+      var z = asFiniteNumber(player && player.z, 0);
+      var rotationY = asFiniteNumber(player && player.rotationY, Math.PI);
+      heroGroup.position.set(x, -1.2 + y + Math.sin(elapsed * 2 + x) * 0.04, z);
+      heroGroup.rotation.y = rotationY;
     }
 
     function ensureHero(player) {

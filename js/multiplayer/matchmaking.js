@@ -60,8 +60,10 @@
         countryKey: selectedCountryKey,
         playerName: playerName
       }));
+      var cacheBust = Date.now();
       window.location.href =
-        'multijugador?game=' + encodeURIComponent(game.id) +
+        'multijugador.html?v=' + encodeURIComponent(cacheBust) +
+        '&game=' + encodeURIComponent(game.id) +
         '&pais=' + encodeURIComponent(selectedCountry) +
         '&countryKey=' + encodeURIComponent(selectedCountryKey) +
         '&playerName=' + encodeURIComponent(playerName) +

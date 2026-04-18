@@ -4,12 +4,38 @@
   function createControls() {
     var pressedKeys = {};
 
-    function handleKeyChange(event, isPressed) {
-      var key = event.key.toLowerCase();
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(key) === -1) {
+    function isMoveKey(event) {
+      var c = event.code;
+      if (c === 'KeyW' || c === 'KeyS' || c === 'KeyA' || c === 'KeyD' || c === 'ArrowUp' || c === 'ArrowDown' || c === 'ArrowLeft' || c === 'ArrowRight') {
+        return true;
+      }
+      var k = (event.key || '').toLowerCase();
+      return (k.length === 1 && 'wasd'.indexOf(k) >= 0) || k === 'arrowup' || k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright';
+    }
+
+    function setMoveState(event, isPressed) {
+      var c = event.code;
+      if (c === 'KeyW' || c === 'ArrowUp') {
+        pressedKeys.w = isPressed;
         return;
       }
-      pressedKeys[key] = isPressed;
+      if (c === 'KeyS' || c === 'ArrowDown') {
+        pressedKeys.s = isPressed;
+        return;
+      }
+      if (c === 'KeyA' || c === 'ArrowLeft') {
+        pressedKeys.a = isPressed;
+        return;
+      }
+      if (c === 'KeyD' || c === 'ArrowRight') {
+        pressedKeys.d = isPressed;
+        return;
+      }
+      var k = (event.key || '').toLowerCase();
+      if (k === 'w' || k === 'arrowup') pressedKeys.w = isPressed;
+      else if (k === 's' || k === 'arrowdown') pressedKeys.s = isPressed;
+      else if (k === 'a' || k === 'arrowleft') pressedKeys.a = isPressed;
+      else if (k === 'd' || k === 'arrowright') pressedKeys.d = isPressed;
     }
 
     function move(player) {
@@ -17,10 +43,10 @@
 
       var moveX = 0;
       var moveZ = 0;
-      if (pressedKeys.w || pressedKeys.arrowup) moveZ -= 1;
-      if (pressedKeys.s || pressedKeys.arrowdown) moveZ += 1;
-      if (pressedKeys.a || pressedKeys.arrowleft) moveX -= 1;
-      if (pressedKeys.d || pressedKeys.arrowright) moveX += 1;
+      if (pressedKeys.w) moveZ -= 1;
+      if (pressedKeys.s) moveZ += 1;
+      if (pressedKeys.a) moveX -= 1;
+      if (pressedKeys.d) moveX += 1;
       if (!moveX && !moveZ) return player;
 
       var length = Math.sqrt(moveX * moveX + moveZ * moveZ) || 1;
@@ -35,11 +61,22 @@
 
     return {
       bind: function () {
-        window.addEventListener('keydown', function (event) {
-          handleKeyChange(event, true);
-        });
-        window.addEventListener('keyup', function (event) {
-          handleKeyChange(event, false);
+        function onKeyDown(event) {
+          if (isMoveKey(event)) {
+            event.preventDefault();
+            setMoveState(event, true);
+          }
+        }
+        function onKeyUp(event) {
+          if (isMoveKey(event)) {
+            event.preventDefault();
+            setMoveState(event, false);
+          }
+        }
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('keyup', onKeyUp, true);
+        window.addEventListener('blur', function () {
+          pressedKeys = {};
         });
       },
       move: move

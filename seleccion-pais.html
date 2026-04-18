@@ -19,7 +19,10 @@
         <p class="paises-subtitle">Elige tu equipo para buscar una partida multijugador.</p>
         <div class="player-name-wrap">
           <label for="player-name-input">Nombre del jugador</label>
-          <input id="player-name-input" type="text" maxlength="20" placeholder="Ej. Fer" autocomplete="nickname">
+          <div class="player-name-row">
+            <input id="player-name-input" type="text" maxlength="20" placeholder="Ej. Fer" autocomplete="nickname">
+            <button type="button" id="btn-buscar-partida" disabled>Buscar partida</button>
+          </div>
         </div>
         <p id="pais-elegido-msg" class="pais-elegido-msg" aria-live="polite"></p>
 
@@ -155,7 +158,6 @@
           </button>
         </div>
 
-        <button type="button" id="btn-buscar-partida" disabled>Buscar partida</button>
         <button type="button" id="btn-volver">Volver al lobby</button>
       </div>
 

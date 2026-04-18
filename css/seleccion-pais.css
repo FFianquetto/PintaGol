@@ -86,8 +86,15 @@ html, body {
   margin-bottom: 0.4rem;
 }
 
+.player-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 #player-name-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.65rem 0.75rem;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -185,7 +192,6 @@ html, body {
 #btn-buscar-partida,
 #btn-volver {
   display: block;
-  width: 100%;
   padding: 0.65rem 1rem;
   font-family: inherit;
   font-size: 0.95rem;
@@ -200,7 +206,9 @@ html, body {
 }
 
 #btn-buscar-partida {
-  margin-bottom: 0.75rem;
+  width: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
   color: #eff6ff;
   background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
 }
@@ -209,6 +217,14 @@ html, body {
   cursor: not-allowed;
   opacity: 0.55;
   filter: grayscale(0.15);
+}
+
+#btn-volver {
+  width: 100%;
+}
+
+#paises-grid + #btn-volver {
+  margin-top: 0.75rem;
 }
 
 #btn-buscar-partida:not(:disabled):hover,
@@ -228,5 +244,16 @@ html, body {
 #btn-buscar-partida:active,
 #btn-volver:active {
   transform: scale(0.98);
+}
+
+@media (max-width: 640px) {
+  .player-name-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #btn-buscar-partida {
+    width: 100%;
+  }
 }
 

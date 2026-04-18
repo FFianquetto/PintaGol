@@ -13,6 +13,13 @@
   var currentPlayerName = '';
   var expectedGameId = '';
   var ACTIVE_MATCH_KEY = 'pintagol_active_match';
+  var cameraDistance = 3.2;
+  var cameraHeight = 2.2;
+  var minCameraDistance = 1.8;
+  var maxCameraDistance = 18;
+  var minCameraHeight = 1.2;
+  var maxCameraHeight = 8;
+  var localKine = { x: 0, y: 0, z: 0, rotationY: Math.PI, _roomInit: false };
 
   function getQueryParams() {
     return new URLSearchParams(window.location.search);
@@ -74,6 +81,193 @@
     }
   }
 
+  function bindCameraZoom(canvas) {
+    if (!canvas) return;
+    canvas.addEventListener('wheel', function (event) {
+      event.preventDefault();
+      var zoomStep = event.deltaY * 0.01;
+      cameraDistance = Math.max(minCameraDistance, Math.min(maxCameraDistance, cameraDistance + zoomStep));
+      // Elevamos un poco la cámara al alejar para mantener referencia del mapa.
+      cameraHeight = Math.max(minCameraHeight, Math.min(maxCameraHeight, 1.4 + cameraDistance * 0.35));
+    }, { passive: false });
+  }
+
+  function addModeloEnMultijugador() {
+    if (!gameScene || !gameScene.scene) return;
+    if (typeof THREE.OBJLoader !== 'function' || typeof THREE.MTLLoader !== 'function') {
+      console.error('OBJLoader/MTLLoader no disponibles en multijugador.');
+      return;
+    }
+    var scene = gameScene.scene;
+    var statusTarget = document.getElementById('multiplayer-country');
+    var manager = new THREE.LoadingManager();
+    var texLoader = new THREE.TextureLoader(manager);
+    var mtlLoader = new THREE.MTLLoader(manager);
+    var objLoader = new THREE.OBJLoader(manager);
+
+    function setStatus(msg) {
+      if (statusTarget) statusTarget.textContent = msg;
+    }
+
+    manager.onStart = function () {
+      setStatus('Cargando modelo 3D...');
+    };
+    manager.onProgress = function (_url, loaded, total) {
+      setStatus('Cargando modelo 3D (' + loaded + '/' + total + ')...');
+    };
+    manager.onError = function (url) {
+      setStatus('Fallo cargando recurso: ' + url);
+    };
+
+    function aplicarTextura(object, texture) {
+      object.traverse(function (child) {
+        if (!child.isMesh) return;
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(function (m) {
+            var mat = m || new THREE.MeshStandardMaterial({ color: 0xffffff });
+            mat.map = texture;
+            mat.color = new THREE.Color(0xffffff);
+            mat.needsUpdate = true;
+            return mat;
+          });
+          return;
+        }
+        if (!child.material) {
+          child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        }
+        child.material.map = texture;
+        child.material.color = new THREE.Color(0xffffff);
+        child.material.needsUpdate = true;
+      });
+    }
+
+    function escalarCentrarYApoyar(object) {
+      var box0 = new THREE.Box3().setFromObject(object);
+      var size0 = box0.getSize(new THREE.Vector3());
+      var maxDim = Math.max(size0.x, size0.y, size0.z) || 1;
+      var scale = 2.2 / maxDim; // Igual que modelos.html (galería)
+      if (isFinite(scale) && scale > 0) object.scale.setScalar(scale);
+      object.updateMatrixWorld(true);
+      var box1 = new THREE.Box3().setFromObject(object);
+      var center = box1.getCenter(new THREE.Vector3());
+      // En multijugador existe un floor en y=-1.45; levantamos el modelo para evitar que quede tapado.
+      object.position.set(-center.x, -1.1 - box1.min.y, -center.z);
+      object.rotation.y = Math.PI;
+      object.name = 'cajaG-map';
+    }
+
+    function cargarModelo3D(pathBase, nombre) {
+      return new Promise(function (resolve, reject) {
+        var mtlPath = pathBase + '.mtl';
+        var objPath = pathBase + '.obj';
+        var texPath = pathBase + '.png';
+        var fallbackTexPath = 'assets/textures/cajaG.png';
+
+        mtlLoader.setResourcePath(pathBase.slice(0, pathBase.lastIndexOf('/') + 1));
+        setStatus('Cargando ' + nombre + '...');
+
+        mtlLoader.load(
+          mtlPath,
+          function (materials) {
+            materials.preload();
+            objLoader.setMaterials(materials);
+            objLoader.load(
+              objPath,
+              function (object) {
+                texLoader.load(
+                  texPath,
+                  function (texture) {
+                    if (typeof THREE.SRGBColorSpace !== 'undefined') {
+                      texture.colorSpace = THREE.SRGBColorSpace;
+                    }
+                    aplicarTextura(object, texture);
+                    resolve(object);
+                  },
+                  undefined,
+                  function () {
+                    texLoader.load(
+                      fallbackTexPath,
+                      function (texture) {
+                        if (typeof THREE.SRGBColorSpace !== 'undefined') {
+                          texture.colorSpace = THREE.SRGBColorSpace;
+                        }
+                        aplicarTextura(object, texture);
+                        resolve(object);
+                      },
+                      undefined,
+                      function () {
+                        resolve(object);
+                      }
+                    );
+                  }
+                );
+              },
+              undefined,
+              function (error) {
+                reject(error);
+              }
+            );
+          },
+          undefined,
+          function (error) {
+            reject(error);
+          }
+        );
+      });
+    }
+
+    // Misma metodología que modelos.html, aplicado a multijugador.
+    cargarModelo3D('assets/models/cajaG/cajaG', 'cajaG')
+      .then(function (objeto) {
+        escalarCentrarYApoyar(objeto);
+        scene.add(objeto);
+        setStatus('Modelo cargado: cajaG.obj');
+      })
+      .catch(function (error) {
+        console.error('Error cargando cajaG en multijugador:', error);
+        setStatus('Error cargando cajaG.obj');
+      });
+  }
+
+  function createFallbackScene(canvas) {
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xdbeafe);
+    var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 2.2, 8.6);
+    camera.lookAt(0, 0.8, 0);
+
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+    var keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+    keyLight.position.set(4, 8, 6);
+    scene.add(keyLight);
+
+    var floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(18, 12, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.95, metalness: 0.02 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.45;
+    scene.add(floor);
+
+    return {
+      scene: scene,
+      camera: camera,
+      renderer: renderer,
+      syncPlayers: function () {},
+      getHero: function () { return null; },
+      getAnyHero: function () { return null; },
+      resize: function () {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    };
+  }
+
   function getLocalPlayer(game) {
     if (!game || !Array.isArray(game.players)) return null;
     for (var i = 0; i < game.players.length; i++) {
@@ -92,7 +286,7 @@
         return player && player.status !== 'waiting';
       });
       if (!roomPlayers.length) {
-        // Fallback de emergencia: siempre mostrar al jugador local para evitar escena vacía.
+        // Fallback de emergencia: posición local persistida (WASD).
         return {
           id: 'local-emergency',
           status: 'active',
@@ -101,28 +295,43 @@
             name: currentPlayerName || 'Jugador local',
             country: currentCountryKey || '',
             countryLabel: currentCountry || '',
-            x: 0,
-            y: 0,
-            z: 0,
-            rotationY: Math.PI
+            x: localKine.x,
+            y: localKine.y,
+            z: localKine.z,
+            rotationY: localKine.rotationY
           }]
         };
       }
 
-      // Fallback visual: mostrar jugadores de sala mientras el GAME se estabiliza.
+      if (!localKine._roomInit) {
+        for (var ri = 0; ri < roomPlayers.length; ri++) {
+          if (roomPlayers[ri].id === localPlayerId) {
+            localKine.x = -4 + (ri % 4) * 2.6;
+            localKine.z = Math.floor(ri / 4) * 2.2 - 1.1;
+            localKine.y = 0;
+            localKine.rotationY = Math.PI;
+            break;
+          }
+        }
+        localKine._roomInit = true;
+      }
+      // Fallback visual: el jugador local usa la misma cinemática que emergencia/room.
       return {
         id: 'room-fallback',
         status: 'active',
         players: roomPlayers.map(function (player, index) {
+          var isMe = player.id === localPlayerId;
+          var defX = -4 + (index % 4) * 2.6;
+          var defZ = Math.floor(index / 4) * 2.2 - 1.1;
           return {
             id: player.id,
             name: player.name || ('Jugador ' + (index + 1)),
             country: player.country || '',
             countryLabel: player.countryLabel || '',
-            x: -4 + (index % 4) * 2.6,
-            y: 0,
-            z: Math.floor(index / 4) * 2.2 - 1.1,
-            rotationY: Math.PI
+            x: isMe ? localKine.x : defX,
+            y: isMe ? localKine.y : 0,
+            z: isMe ? localKine.z : defZ,
+            rotationY: isMe ? localKine.rotationY : Math.PI
           };
         })
       };
@@ -130,6 +339,7 @@
     if (!expectedGameId || game.id !== expectedGameId) {
       expectedGameId = game.id;
     }
+    localKine._roomInit = false;
     return game;
   }
 
@@ -142,7 +352,6 @@
   function updateLocalPlayer() {
     var game = getRenderableGame();
     if (!game || !Array.isArray(game.players)) return;
-    if (game.id === 'room-fallback') return;
 
     var byId = getLocalPlayer(game);
     if (!byId) {
@@ -165,7 +374,12 @@
     var player = getLocalPlayer(game);
     if (!player) return;
     controls.move(player);
-    if (game.id !== 'local-emergency') {
+    if (game.id === 'local-emergency' || game.id === 'room-fallback') {
+      localKine.x = player.x;
+      localKine.y = player.y;
+      localKine.z = player.z;
+      localKine.rotationY = player.rotationY;
+    } else {
       store.updateGamePlayer(player);
     }
   }
@@ -203,9 +417,9 @@
     var localHero = gameScene.getHero(localPlayerId) || gameScene.getAnyHero();
     if (localHero) {
       // Cámara tercera persona detrás del personaje local.
-      var desiredX = localHero.position.x - Math.sin(localHero.rotation.y) * 2.2;
-      var desiredY = localHero.position.y + 2.2;
-      var desiredZ = localHero.position.z - Math.cos(localHero.rotation.y) * 2.2;
+      var desiredX = localHero.position.x - Math.sin(localHero.rotation.y) * cameraDistance;
+      var desiredY = localHero.position.y + cameraHeight;
+      var desiredZ = localHero.position.z - Math.cos(localHero.rotation.y) * cameraDistance;
       gameScene.camera.position.x += (desiredX - gameScene.camera.position.x) * 0.09;
       gameScene.camera.position.y += (desiredY - gameScene.camera.position.y) * 0.09;
       gameScene.camera.position.z += (desiredZ - gameScene.camera.position.z) * 0.09;
@@ -219,7 +433,10 @@
         weapon.position.y = 1.52 + Math.cos(t * 8) * 0.01;
       }
     } else {
-      // Cámara estable mientras aparece el muñeco local.
+      // Vista general mientras aparece el jugador/modelos.
+      gameScene.camera.position.x += (0 - gameScene.camera.position.x) * 0.06;
+      gameScene.camera.position.y += (5.8 - gameScene.camera.position.y) * 0.06;
+      gameScene.camera.position.z += (8.6 - gameScene.camera.position.z) * 0.06;
       gameScene.camera.lookAt(0, 1.2, 0);
     }
     gameScene.renderer.render(gameScene.scene, gameScene.camera);
@@ -228,24 +445,40 @@
   function init() {
     var canvas = document.getElementById('multiplayer-canvas');
     if (!canvas) return;
-    gameScene = window.PintaGolGameScene.createScene(canvas);
-    controls = window.PintaGolGameControls.createControls();
+    canvas.addEventListener('click', function () {
+      canvas.focus({ preventScroll: true });
+    });
     updateCountryLabel();
-    if (!expectedGameId) {
+    if (window.PintaGolGameScene && typeof window.PintaGolGameScene.createScene === 'function') {
+      try {
+        gameScene = window.PintaGolGameScene.createScene(canvas);
+      } catch (error) {
+        console.error(error);
+        gameScene = createFallbackScene(canvas);
+      }
+    } else {
+      gameScene = createFallbackScene(canvas);
+    }
+    addModeloEnMultijugador();
+    controls = window.PintaGolGameControls.createControls();
+    var hasActiveGame = !!expectedGameId;
+    if (!hasActiveGame) {
       var countryEl = document.getElementById('multiplayer-country');
       if (countryEl) {
-        countryEl.textContent = 'Esperando partida activa. Vuelve a buscar partida desde la sala de carga.';
+        countryEl.textContent = 'Sin partida activa: vista de pruebas 3D.';
       }
-      return;
     }
     bindUI();
-    startNetworkLoops();
-    syncScene();
+    if (hasActiveGame) {
+      startNetworkLoops();
+      syncScene();
+    }
 
     controls.bind();
+    bindCameraZoom(canvas);
     window.addEventListener('resize', gameScene.resize);
     window.addEventListener('storage', function (event) {
-      if (event.key === store.GAME_KEY) {
+      if (hasActiveGame && event.key === store.GAME_KEY) {
         syncScene();
       }
     });
