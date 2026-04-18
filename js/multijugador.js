@@ -94,139 +94,20 @@
 
   function addModeloEnMultijugador() {
     if (!gameScene || !gameScene.scene) return;
-    if (typeof THREE.OBJLoader !== 'function' || typeof THREE.MTLLoader !== 'function') {
-      console.error('OBJLoader/MTLLoader no disponibles en multijugador.');
+    var assets = window.PintaGolMultiplayerAssets;
+    if (!assets || typeof assets.loadMultijugadorShowcase !== 'function') {
+      console.error('PintaGolMultiplayerAssets.loadMultijugadorShowcase no disponible.');
       return;
     }
-    var scene = gameScene.scene;
-    var statusTarget = document.getElementById('multiplayer-country');
-    var manager = new THREE.LoadingManager();
-    var texLoader = new THREE.TextureLoader(manager);
-    var mtlLoader = new THREE.MTLLoader(manager);
-    var objLoader = new THREE.OBJLoader(manager);
-
-    function setStatus(msg) {
-      if (statusTarget) statusTarget.textContent = msg;
+    if (gameScene.renderer && typeof assets.setRendererMaxAnisotropy === 'function') {
+      var cap = gameScene.renderer.capabilities && gameScene.renderer.capabilities.getMaxAnisotropy;
+      var maxA = typeof cap === 'function' ? cap.call(gameScene.renderer.capabilities) : 4;
+      assets.setRendererMaxAnisotropy(Math.min(4, maxA));
     }
-
-    manager.onStart = function () {
-      setStatus('Cargando modelo 3D...');
-    };
-    manager.onProgress = function (_url, loaded, total) {
-      setStatus('Cargando modelo 3D (' + loaded + '/' + total + ')...');
-    };
-    manager.onError = function (url) {
-      setStatus('Fallo cargando recurso: ' + url);
-    };
-
-    function aplicarTextura(object, texture) {
-      object.traverse(function (child) {
-        if (!child.isMesh) return;
-        if (Array.isArray(child.material)) {
-          child.material = child.material.map(function (m) {
-            var mat = m || new THREE.MeshStandardMaterial({ color: 0xffffff });
-            mat.map = texture;
-            mat.color = new THREE.Color(0xffffff);
-            mat.needsUpdate = true;
-            return mat;
-          });
-          return;
-        }
-        if (!child.material) {
-          child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        }
-        child.material.map = texture;
-        child.material.color = new THREE.Color(0xffffff);
-        child.material.needsUpdate = true;
-      });
-    }
-
-    function escalarCentrarYApoyar(object) {
-      var box0 = new THREE.Box3().setFromObject(object);
-      var size0 = box0.getSize(new THREE.Vector3());
-      var maxDim = Math.max(size0.x, size0.y, size0.z) || 1;
-      var scale = 2.2 / maxDim; // Igual que modelos.html (galería)
-      if (isFinite(scale) && scale > 0) object.scale.setScalar(scale);
-      object.updateMatrixWorld(true);
-      var box1 = new THREE.Box3().setFromObject(object);
-      var center = box1.getCenter(new THREE.Vector3());
-      // En multijugador existe un floor en y=-1.45; levantamos el modelo para evitar que quede tapado.
-      object.position.set(-center.x, -1.1 - box1.min.y, -center.z);
-      object.rotation.y = Math.PI;
-      object.name = 'cajaG-map';
-    }
-
-    function cargarModelo3D(pathBase, nombre) {
-      return new Promise(function (resolve, reject) {
-        var mtlPath = pathBase + '.mtl';
-        var objPath = pathBase + '.obj';
-        var texPath = pathBase + '.png';
-        var fallbackTexPath = 'assets/textures/cajaG.png';
-
-        mtlLoader.setResourcePath(pathBase.slice(0, pathBase.lastIndexOf('/') + 1));
-        setStatus('Cargando ' + nombre + '...');
-
-        mtlLoader.load(
-          mtlPath,
-          function (materials) {
-            materials.preload();
-            objLoader.setMaterials(materials);
-            objLoader.load(
-              objPath,
-              function (object) {
-                texLoader.load(
-                  texPath,
-                  function (texture) {
-                    if (typeof THREE.SRGBColorSpace !== 'undefined') {
-                      texture.colorSpace = THREE.SRGBColorSpace;
-                    }
-                    aplicarTextura(object, texture);
-                    resolve(object);
-                  },
-                  undefined,
-                  function () {
-                    texLoader.load(
-                      fallbackTexPath,
-                      function (texture) {
-                        if (typeof THREE.SRGBColorSpace !== 'undefined') {
-                          texture.colorSpace = THREE.SRGBColorSpace;
-                        }
-                        aplicarTextura(object, texture);
-                        resolve(object);
-                      },
-                      undefined,
-                      function () {
-                        resolve(object);
-                      }
-                    );
-                  }
-                );
-              },
-              undefined,
-              function (error) {
-                reject(error);
-              }
-            );
-          },
-          undefined,
-          function (error) {
-            reject(error);
-          }
-        );
-      });
-    }
-
-    // Misma metodología que modelos.html, aplicado a multijugador.
-    cargarModelo3D('assets/models/cajaG/cajaG', 'cajaG')
-      .then(function (objeto) {
-        escalarCentrarYApoyar(objeto);
-        scene.add(objeto);
-        setStatus('Modelo cargado: cajaG.obj');
-      })
-      .catch(function (error) {
-        console.error('Error cargando cajaG en multijugador:', error);
-        setStatus('Error cargando cajaG.obj');
-      });
+    // Mismos FBX que astro-sync: astro/astronout.fbx + gun1/gun1 (assets.js).
+    assets.loadMultijugadorShowcase(gameScene.scene, function (_msg) {
+      updateCountryLabel();
+    });
   }
 
   function createFallbackScene(canvas) {
@@ -278,6 +159,14 @@
     return null;
   }
 
+  function applyWsRemote(gameSnapshot) {
+    var bridge = window.PintaGolWsBridge;
+    if (!gameSnapshot || !bridge || typeof bridge.mergeRemoteIntoGame !== 'function') {
+      return gameSnapshot;
+    }
+    return bridge.mergeRemoteIntoGame(gameSnapshot, localPlayerId);
+  }
+
   function getRenderableGame() {
     var game = store.getGame();
     if (!game || game.status !== 'active' || !Array.isArray(game.players) || !game.players.length) {
@@ -287,7 +176,7 @@
       });
       if (!roomPlayers.length) {
         // Fallback de emergencia: posición local persistida (WASD).
-        return {
+        return applyWsRemote({
           id: 'local-emergency',
           status: 'active',
           players: [{
@@ -300,7 +189,7 @@
             z: localKine.z,
             rotationY: localKine.rotationY
           }]
-        };
+        });
       }
 
       if (!localKine._roomInit) {
@@ -316,7 +205,7 @@
         localKine._roomInit = true;
       }
       // Fallback visual: el jugador local usa la misma cinemática que emergencia/room.
-      return {
+      return applyWsRemote({
         id: 'room-fallback',
         status: 'active',
         players: roomPlayers.map(function (player, index) {
@@ -334,13 +223,13 @@
             rotationY: isMe ? localKine.rotationY : Math.PI
           };
         })
-      };
+      });
     }
     if (!expectedGameId || game.id !== expectedGameId) {
       expectedGameId = game.id;
     }
     localKine._roomInit = false;
-    return game;
+    return applyWsRemote(game);
   }
 
   function syncScene() {
@@ -392,6 +281,13 @@
       status: 'playing'
     });
 
+    if (window.PintaGolWsBridge && typeof window.PintaGolWsBridge.connect === 'function') {
+      window.PintaGolWsBridge.connect({
+        gameId: expectedGameId,
+        playerId: localPlayerId
+      });
+    }
+
     if (syncInterval) window.clearInterval(syncInterval);
     syncInterval = window.setInterval(function () {
       syncScene();
@@ -433,7 +329,7 @@
         weapon.position.y = 1.52 + Math.cos(t * 8) * 0.01;
       }
     } else {
-      // Vista general mientras aparece el jugador/modelos.
+      // Vista general mientras aparece el jugador.
       gameScene.camera.position.x += (0 - gameScene.camera.position.x) * 0.06;
       gameScene.camera.position.y += (5.8 - gameScene.camera.position.y) * 0.06;
       gameScene.camera.position.z += (8.6 - gameScene.camera.position.z) * 0.06;
@@ -485,6 +381,9 @@
     window.addEventListener('beforeunload', function () {
       if (syncInterval) window.clearInterval(syncInterval);
       if (roomHeartbeat) window.clearInterval(roomHeartbeat);
+      if (window.PintaGolWsBridge && typeof window.PintaGolWsBridge.disconnect === 'function') {
+        window.PintaGolWsBridge.disconnect();
+      }
       store.removeRoomPlayer();
     });
     animate();

@@ -1,0 +1,56 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+  background: #0c1222;
+}
+
+#astro-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#astro-hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2;
+  padding: 0.65rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55), transparent);
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  pointer-events: none;
+}
+
+#astro-hud button {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+#astro-hint { color: #94a3b8; }
+#estado-red {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+#astro-status {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+#astro-status.ok { color: #86efac; }
+#astro-status.err { color: #fca5a5; }

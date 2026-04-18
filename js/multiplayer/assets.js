@@ -11,6 +11,7 @@
     '/assets/models/',
     '../assets/models/'
   ];
+  var rendererMaxAnisotropy = 4;
 
   function buildCandidatePaths(relativePath) {
     return MODEL_BASE_CANDIDATES.map(function (base) {
@@ -138,6 +139,46 @@
     });
   }
 
+  /** Tono azul traje (misma idea que la vista astro-sync). */
+  function applyAstroMaterialsLikeModelo(object, colorHex) {
+    var base = new THREE.Color(colorHex != null ? colorHex : 0x2f6fe0);
+    object.traverse(function (child) {
+      if (!child.isMesh) return;
+      var materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach(function (M) {
+        if (!M) return;
+        M.color.copy(base);
+        if ('emissive' in M && M.emissive) {
+          M.emissive.copy(base).multiplyScalar(0.22);
+        } else if ('emissive' in M) {
+          M.emissive = base.clone().multiplyScalar(0.2);
+        }
+        if (typeof M.emissiveIntensity === 'number') {
+          M.emissiveIntensity = Math.max(M.emissiveIntensity, 0.22);
+        }
+        if (typeof M.metalness === 'number') {
+          M.metalness = Math.max(0, Math.max(M.metalness, 0.12));
+        }
+        if (typeof M.roughness === 'number') {
+          M.roughness = Math.min(0.82, M.roughness < 0.3 ? 0.72 : M.roughness);
+        }
+        M.needsUpdate = true;
+      });
+    });
+  }
+
+  function prepareTextureLikeModelo(texture) {
+    if (!texture) return texture;
+    if (typeof THREE.SRGBColorSpace !== 'undefined') {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    texture.flipY = true;
+    if (texture.anisotropy !== undefined && typeof rendererMaxAnisotropy === 'number') {
+      texture.anisotropy = rendererMaxAnisotropy;
+    }
+    return texture;
+  }
+
   function createFallbackHero(color) {
     var group = new THREE.Group();
     var bodyMat = new THREE.MeshStandardMaterial({ color: color || 0xdbeafe, roughness: 0.75 });
@@ -161,11 +202,11 @@
 
   function attachWeapon(hero) {
     loadTextureFromCandidates(
-      buildCandidatePaths('gun2/gun2.png'),
+      buildCandidatePaths('gun1/gun1.png'),
       function (gunTexture) {
-        gunTexture.colorSpace = THREE.SRGBColorSpace;
+        prepareTextureLikeModelo(gunTexture);
         loadFbxFromCandidates(
-          buildCandidatePaths('gun2/gun2.fbx'),
+          buildCandidatePaths('gun1/gun1.fbx'),
           function (gun) {
             configureModelMaterials(gun, gunTexture);
             gun.scale.setScalar(0.018);
@@ -175,12 +216,12 @@
             hero.add(gun);
           },
           function (error) {
-            console.error('No se pudo cargar gun2.fbx', error);
+            console.error('No se pudo cargar gun1.fbx', error);
           }
         );
       },
       function (error) {
-        console.error('No se pudo cargar gun2.png', error);
+        console.error('No se pudo cargar gun1.png', error);
       }
     );
   }
@@ -211,11 +252,17 @@
 
   function loadHeroModel(heroGroup) {
     var player = heroGroup.userData.player || {};
-    var suitColor = store.getCountryColor(player.country);
+    var suitColor =
+      heroGroup.userData && heroGroup.userData.overrideSuitColor != null
+        ? heroGroup.userData.overrideSuitColor
+        : store.getCountryColor(player.country);
+    var skipNameTag = !!(heroGroup.userData && heroGroup.userData.skipNameTag);
     var instantFallback = createFallbackHero(suitColor);
     instantFallback.name = 'instant-fallback-hero';
     heroGroup.add(instantFallback);
-    heroGroup.add(createNameTag(heroGroup.userData.player || {}));
+    if (!skipNameTag) {
+      heroGroup.add(createNameTag(heroGroup.userData.player || {}));
+    }
     loadFbxFromCandidates(
       buildCandidatePaths('astro/astronout.fbx'),
       function (astro) {
@@ -223,7 +270,7 @@
         if (fallbackNode) {
           heroGroup.remove(fallbackNode);
         }
-        configureModelMaterials(astro, null, suitColor);
+        applyAstroMaterialsLikeModelo(astro, suitColor);
         astro.scale.setScalar(0.024);
         astro.rotation.set(0, Math.PI, 0);
         heroGroup.add(astro);
@@ -234,6 +281,29 @@
         attachWeapon(heroGroup);
       }
     );
+  }
+
+  /**
+   * Mismo astronauta + gun1 que en astro-sync (rutas assets/models/astro y gun1),
+   * como referencia en el mapa (sustituye la caja demo anterior).
+   */
+  function loadMultijugadorShowcase(scene, onStatus) {
+    if (!scene) return;
+    var existing = scene.getObjectByName('multijugador-modelo-central');
+    if (existing) {
+      scene.remove(existing);
+    }
+    var group = new THREE.Group();
+    group.name = 'multijugador-modelo-central';
+    group.userData.skipNameTag = true;
+    group.userData.overrideSuitColor = 0x2f6fe0;
+    group.userData.player = { name: '', country: '' };
+    group.position.set(0, -1.2, 0);
+    scene.add(group);
+    if (typeof onStatus === 'function') {
+      onStatus('Cargando astronauta y arma 2 (como en Modelos)…');
+    }
+    loadHeroModel(group);
   }
 
   function buildPaintballTextureMap() {
@@ -367,6 +437,12 @@
 
   window.PintaGolMultiplayerAssets = {
     loadHeroModel: loadHeroModel,
-    loadPaintballArena: loadPaintballArena
+    loadPaintballArena: loadPaintballArena,
+    loadMultijugadorShowcase: loadMultijugadorShowcase,
+    setRendererMaxAnisotropy: function (value) {
+      if (typeof value === 'number' && isFinite(value) && value > 0) {
+        rendererMaxAnisotropy = value;
+      }
+    }
   };
 })(window);

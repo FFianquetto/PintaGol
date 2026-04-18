@@ -62,7 +62,7 @@
       }));
       var cacheBust = Date.now();
       window.location.href =
-        'multijugador.html?v=' + encodeURIComponent(cacheBust) +
+        'astro-sync.html?v=' + encodeURIComponent(cacheBust) +
         '&game=' + encodeURIComponent(game.id) +
         '&pais=' + encodeURIComponent(selectedCountry) +
         '&countryKey=' + encodeURIComponent(selectedCountryKey) +

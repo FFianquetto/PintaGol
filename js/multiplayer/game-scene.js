@@ -9,7 +9,7 @@
     var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     var heroesById = {};
 
-    // Mismo fondo base que en modelos.html (galería)
+    // Mismo fondo base que astro-sync / galería
     scene.background = new THREE.Color(0x0f172a);
     camera.position.set(0, 1.3, 7.5);
     camera.lookAt(0, 1.2, 0);

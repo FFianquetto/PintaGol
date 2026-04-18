@@ -100,7 +100,11 @@
   function prunePlayers(players) {
     var current = now();
     return (players || []).filter(function (player) {
-      return player && current - Number(player.lastSeen || 0) < STALE_MS;
+      if (!player) return false;
+      var ls = Number(player.lastSeen);
+      // Sin lastSeen válido no podar: antes (lastSeen || 0) hacía current-0 >> STALE y vaciaba la partida.
+      if (!isFinite(ls) || ls <= 0) return true;
+      return current - ls < STALE_MS;
     });
   }
 

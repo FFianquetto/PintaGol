@@ -28,6 +28,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
   pointer-events: none;
 }
 #modelo-hud a { pointer-events: auto; color: #86efac; }
+.modelo-btn-dual {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+  font: inherit;
+  font-size: 0.82rem;
+}
+.modelo-estado-red {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  color: #64748b;
+}
 #modelo-pick-wrap { pointer-events: auto; }
 #modelo-pick {
   pointer-events: auto;
@@ -39,8 +55,32 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui
   background: #0f172a;
   color: #e2e8f0;
   font: inherit;
+  color-scheme: dark;
+}
+/* Evita texto invisible con el select deshabilitado (p. ej. en partida) */
+#modelo-pick:disabled {
+  opacity: 1;
+  color: #e2e8f0;
+  -webkit-text-fill-color: #e2e8f0;
+  cursor: not-allowed;
+}
+#modelo-pick option {
+  background-color: #0f172a;
+  color: #e2e8f0;
 }
 #modelo-estado { font-weight: 600; }
 #modelo-estado.ok { color: #86efac; }
 #modelo-estado.err { color: #fca5a5; }
 #modelo-detalle.modelo-det { font-size: 0.82rem; color: #94a3b8; max-width: 36rem; }
+
+.modelo-partida-bar {
+  flex-basis: 100%;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(22, 101, 52, 0.45);
+  border: 1px solid rgba(134, 239, 172, 0.45);
+  color: #ecfdf5;
+  font-size: 0.82rem;
+  pointer-events: none;
+}
+.modelo-partida-bar[hidden] { display: none !important; }
