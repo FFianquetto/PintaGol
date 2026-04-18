@@ -29,6 +29,32 @@ const GUN_ARENA = 4.2;
 
 const canvas = document.getElementById("astro-canvas");
 const statusEl = document.getElementById("astro-status");
+const playerNameHud = document.getElementById("astro-player-name");
+const ACTIVE_MATCH_KEY = "pintagol_active_match";
+
+function resolveLocalPlayerName() {
+  const q = new URLSearchParams(window.location.search);
+  const fromQuery = q.get("playerName");
+  if (fromQuery && fromQuery.trim()) return fromQuery.trim();
+  try {
+    const raw = window.sessionStorage.getItem(ACTIVE_MATCH_KEY);
+    if (!raw) return "";
+    const o = JSON.parse(raw);
+    if (o && typeof o.playerName === "string" && o.playerName.trim()) return o.playerName.trim();
+  } catch (_) {
+    /* ignorar */
+  }
+  return "";
+}
+
+(function showLocalPlayerName() {
+  const name = resolveLocalPlayerName();
+  if (playerNameHud) {
+    playerNameHud.textContent = name ? `Jugador: ${name}` : "";
+    if (!name) playerNameHud.setAttribute("hidden", "");
+    else playerNameHud.removeAttribute("hidden");
+  }
+})();
 
 function setStatus(msg, ok) {
   if (!statusEl) return;

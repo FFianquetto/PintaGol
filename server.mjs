@@ -35,6 +35,7 @@ function serveStatic(req, res) {
     const u = new URL(req.url || '/', 'http://localhost');
     let pathname = decodeURIComponent(u.pathname);
     if (pathname === '/') pathname = '/index.html';
+    if (pathname === '/astro-sync' || pathname === '/astro-sync/') pathname = '/astro-sync.html';
 
     const filePath = path.normalize(path.join(ROOT, pathname));
     if (!filePath.startsWith(ROOT)) {

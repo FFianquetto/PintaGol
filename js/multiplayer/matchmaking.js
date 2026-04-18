@@ -61,13 +61,17 @@
         playerName: playerName
       }));
       var cacheBust = Date.now();
-      window.location.href =
-        'astro-sync.html?v=' + encodeURIComponent(cacheBust) +
-        '&game=' + encodeURIComponent(game.id) +
-        '&pais=' + encodeURIComponent(selectedCountry) +
-        '&countryKey=' + encodeURIComponent(selectedCountryKey) +
-        '&playerName=' + encodeURIComponent(playerName) +
-        '&playerId=' + encodeURIComponent(localPlayerId);
+      var dest =
+        window.location.protocol === 'file:'
+          ? new URL('astro-sync.html', window.location.href)
+          : new URL('/astro-sync', window.location.origin);
+      dest.searchParams.set('v', String(cacheBust));
+      dest.searchParams.set('game', game.id);
+      dest.searchParams.set('pais', selectedCountry);
+      dest.searchParams.set('countryKey', selectedCountryKey);
+      dest.searchParams.set('playerName', playerName);
+      dest.searchParams.set('playerId', localPlayerId);
+      window.location.href = dest.toString();
     }
 
     function heartbeat() {
