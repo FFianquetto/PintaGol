@@ -75,12 +75,12 @@ export function onVistaMessage(fn) {
 
 export function iniciarVistaSync() {
   return new Promise((resolve) => {
-    function usarBC(motivo) {
+    function usarBC(_motivo) {
       if (transporte) return;
       const bc = new BroadcastChannel(CANAL_VISTA);
       transporte = { kind: "bc", bc };
       bc.onmessage = (ev) => notificarMensaje(ev.data);
-      actualizarEtiquetaRed(`BroadcastChannel · ${motivo}`);
+      actualizarEtiquetaRed("");
       vaciarCola();
       resolve();
     }
