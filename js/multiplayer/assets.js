@@ -210,7 +210,7 @@
           function (gun2) {
             configureModelMaterials(gun2, gunTexture);
             gun2.scale.setScalar(0.018);
-            gun2.position.set(-0.58, 1.52, 0.92);
+            gun2.position.set(-0.58, 5.5, 0.92);
             gun2.rotation.set(0.08, Math.PI / 2, -0.22);
             gun2.name = 'weapon-model-gun2';
             hero.add(gun2);

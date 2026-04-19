@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import {
   iniciarVistaSync,
   enviarVista,
@@ -8,31 +7,69 @@ import {
   getVentanaId,
   getTransportLabel
 } from "./modelo-vista-sync.js";
+import {
+  applyAstroNeutral,
+  prepTex,
+  applyTextureToAstro,
+  prepAstroComoArena,
+  setupGunMesh,
+  loadTextureFirst,
+  loadFbxFirst
+} from "./astro-sync-assets.js";
+import {
+  gunSetupOptions,
+  applyGun2Input,
+  clampGun2LocalOffset,
+  applyGun2LocalTransform,
+  applyGun2RemoteTransform
+} from "./astro-sync-gun.js";
 
 const FBX_URLS = ["assets/models/astro/astronout.fbx", "/assets/models/astro/astronout.fbx"];
-const PNG_URLS = ["assets/models/astro/astronout.png", "/assets/models/astro/astronout.png"];
+const PNG_URLS = ["assets/models/astro/astronout.jpg", "/assets/models/astro/astronout.jpg"];
 
 /** Mismas bases que multijugador (assets.js) para encontrar gun1 / gun2. */
 const MODEL_BASES = ["assets/models/", "/assets/models/", "../assets/models/"];
 
-const ASTRO_BORDE = 2.45;
+const ASTRO_BORDE = 18;
 /** Cámara alejada y alta para ver cuerpo + arma sin “zoom” excesivo. */
-const camSegui = { dist: 10.5, alto: 3.6, suav: 0.1 };
+const camSegui = { dist: 8.4, alto: 5.95, suav: 0.2 };
+const camZoom = {
+  minDist: 4.5,
+  maxDist: 13.5,
+  targetDist: 8.4,
+  wheelStep: 0.0022
+};
+const mouseLook = {
+  targetYaw: 0,
+  pitch: 0.08,
+  sensitivity: 0.0022,
+  pitchMin: -0.5,
+  pitchMax: 0.2
+};
 /** Escala base del mesh (Arena); el grupo se encoge con WORLD_GROUP_SCALE. */
-const ASTRO_SCALE = 0.02;
+const ASTRO_SCALE = 0.018;
 /** Encoge el astronauta (el arma usa la misma escala visual). */
 const WORLD_GROUP_SCALE = 0.52;
-/** Posición mundo del arma 1 (IJKO). */
-const gunWorld = { x: 1.45, y: 0.78, z: 0.42 };
-/** Posición mundo del arma 2 (CVBN), a la izquierda respecto al 1. */
-const gun2World = { x: -1.35, y: 0.78, z: 0.42 };
+
+/** Offset local del arma 2 respecto al astronauta (CVBN). */
+const gun2World = { x: -0.55, y: 2.99, z: 1.8 };
 const GUN_NUDGE = 0.028;
 const GUN_ARENA = 4.2;
+const GUN2_SCALE = 0.008;
+const GUN2_ROTATION = { rotationX: Math.PI / 4.5, rotationY: -1.8, rotationZ: 0 };
+
+const PLAYER_SPAWNS = [
+  { x: -18, z: -18, yaw: Math.PI / 4 },
+  { x: 18, z: -18, yaw: (3 * Math.PI) / 4 },
+  { x: -18, z: 18, yaw: -Math.PI / 4 },
+  { x: 18, z: 18, yaw: (-3 * Math.PI) / 4 }
+];
 
 const canvas = document.getElementById("astro-canvas");
 const statusEl = document.getElementById("astro-status");
 const playerNameHud = document.getElementById("astro-player-name");
 const ACTIVE_MATCH_KEY = "pintagol_active_match";
+const LOCAL_PLAYER_ID_KEY = "astro_sync_player_id";
 
 function resolveLocalPlayerName() {
   const q = new URLSearchParams(window.location.search);
@@ -48,6 +85,28 @@ function resolveLocalPlayerName() {
   }
   return "";
 }
+
+function resolveLocalPlayerId() {
+  try {
+    const saved = window.sessionStorage.getItem(LOCAL_PLAYER_ID_KEY);
+    if (saved && saved.trim()) return saved.trim();
+  } catch (_) {
+    /* ignorar */
+  }
+  const fromName = resolveLocalPlayerName();
+  const base = fromName ? fromName.replace(/\s+/g, "_") : "jugador";
+  const generated = `${base}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  try {
+    window.sessionStorage.setItem(LOCAL_PLAYER_ID_KEY, generated);
+  } catch (_) {
+    /* ignorar */
+  }
+  return generated;
+}
+
+const LOCAL_PLAYER_ID = resolveLocalPlayerId();
+const LOCAL_PLAYER_NAME = resolveLocalPlayerName();
+const LOCAL_PLAYER_LABEL = LOCAL_PLAYER_NAME || "Jugador";
 
 (function showLocalPlayerName() {
   const name = resolveLocalPlayerName();
@@ -86,9 +145,9 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const di = new THREE.DirectionalLight(0xffffff, 0.95);
 di.position.set(2.5, 4, 3.5);
 scene.add(di);
-scene.add(new THREE.GridHelper(24, 24, 0x475569, 0x1e293b));
+scene.add(new THREE.GridHelper(140, 140, 0x475569, 0x1e293b));
 
-const wander = { x: 0, z: 0, lastRot: Math.PI };
+const wander = { x: 0, z: 0, lastRot: 0 };
 const keys = { w: false, a: false, s: false, d: false };
 const keysGun = { i: false, j: false, k: false, o: false };
 const keysGun2 = { c: false, v: false, b: false, n: false };
@@ -99,126 +158,90 @@ let astroRoot = null;
 let gunRoot = null;
 /** Arma 2 (CVBN). @type {THREE.Object3D | null} */
 let gun2Root = null;
+const remotePlayers = new Map();
+const remotePlayersLoading = new Set();
 
-function applyAstroBlue(obj) {
-  const base = new THREE.Color(0x2f6fe0);
-  obj.traverse((child) => {
-    if (!child.isMesh) return;
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
-    mats.forEach((M) => {
-      if (!M) return;
-      M.color.copy(base);
-      if ("emissive" in M && M.emissive) {
-        M.emissive.copy(base).multiplyScalar(0.22);
-      } else if ("emissive" in M) {
-        M.emissive = base.clone().multiplyScalar(0.2);
-      }
-      if (typeof M.emissiveIntensity === "number") {
-        M.emissiveIntensity = Math.max(M.emissiveIntensity, 0.22);
-      }
-      if (typeof M.metalness === "number") M.metalness = Math.max(0, Math.max(M.metalness, 0.12));
-      if (typeof M.roughness === "number") {
-        M.roughness = Math.min(0.82, M.roughness < 0.3 ? 0.72 : M.roughness);
-      }
-      M.needsUpdate = true;
-    });
+function shortestAngleDelta(from, to) {
+  const TAU = Math.PI * 2;
+  let d = (to - from + Math.PI) % TAU;
+  if (d < 0) d += TAU;
+  return d - Math.PI;
+}
+
+function compactPlayerId(id) {
+  if (!id || typeof id !== "string") return "Jugador";
+  return id.length > 10 ? id.slice(0, 10) : id;
+}
+
+function spawnIndexFromPlayerId(playerId) {
+  let hash = 0;
+  for (let i = 0; i < playerId.length; i += 1) {
+    hash = (hash * 33 + playerId.charCodeAt(i)) >>> 0;
+  }
+  return hash % PLAYER_SPAWNS.length;
+}
+
+function spawnForPlayer(playerId) {
+  return PLAYER_SPAWNS[spawnIndexFromPlayerId(playerId)] || PLAYER_SPAWNS[0];
+}
+
+function createNameTagSprite(labelText) {
+  const canvasTag = document.createElement("canvas");
+  canvasTag.width = 512;
+  canvasTag.height = 128;
+  const ctx = canvasTag.getContext("2d");
+  if (!ctx) return null;
+
+  const text = (labelText && labelText.trim()) || "Jugador";
+  ctx.clearRect(0, 0, canvasTag.width, canvasTag.height);
+  ctx.fillStyle = "rgba(15, 23, 42, 0.86)";
+  ctx.fillRect(0, 20, canvasTag.width, 88);
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.8)";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 22, canvasTag.width - 4, 84);
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "700 56px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, canvasTag.width / 2, canvasTag.height / 2 + 2);
+
+  const texture = new THREE.CanvasTexture(canvasTag);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false
   });
+  const sprite = new THREE.Sprite(material);
+  sprite.name = "astro-gametag";
+  sprite.position.set(0, 7.50, 0);
+  sprite.scale.set(4.5, 1.4, 1);
+  return sprite;
 }
 
-function prepTex(t) {
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = aniso;
-  t.flipY = true;
-  return t;
-}
-
-function applyTextureBlueSuit(obj, texture) {
-  obj.traverse((child) => {
-    if (!child.isMesh) return;
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
-    mats.forEach((M) => {
-      if (!M) return;
-      M.map = texture;
-      M.color.setHex(0xffffff);
-      M.needsUpdate = true;
-    });
-  });
-}
-
-/** Igual que multijugador: escala pequeña + pies en Y=0. */
-function prepAstroComoArena(astro) {
-  astro.scale.setScalar(ASTRO_SCALE);
-  astro.rotation.set(0, Math.PI, 0);
-  astro.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(astro);
-  const c = b.getCenter(new THREE.Vector3());
-  astro.position.set(-c.x, -b.min.y, -c.z);
-}
-
-function configureGunMaterials(object, texture) {
-  object.traverse((child) => {
-    if (!child.isMesh) return;
-    if (Array.isArray(child.material)) {
-      child.material = child.material.map((material) => {
-        const next = material || new THREE.MeshStandardMaterial({ color: 0xffffff });
-        if (texture) next.map = texture;
-        next.color.setHex(0xffffff);
-        next.needsUpdate = true;
-        return next;
-      });
-      return;
-    }
-    if (!child.material) child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    if (texture) child.material.map = texture;
-    child.material.color.setHex(0xffffff);
-    child.material.needsUpdate = true;
-  });
+function updateNameTag(playerGroup, labelText) {
+  if (!playerGroup) return;
+  const prev = playerGroup.getObjectByName("astro-gametag");
+  if (prev) {
+    if (prev.material?.map) prev.material.map.dispose?.();
+    prev.material?.dispose?.();
+    playerGroup.remove(prev);
+  }
+  const sprite = createNameTagSprite(labelText);
+  if (sprite) playerGroup.add(sprite);
 }
 
 function pathsFor(rel) {
   return MODEL_BASES.map((base) => base + rel);
 }
 
-function loadTextureFirst(urls, onLoad, onFail) {
-  let i = 0;
-  const txL = new THREE.TextureLoader();
-  function next() {
-    if (i >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    txL.load(
-      urls[i++],
-      (t) => onLoad(t),
-      undefined,
-      next
-    );
-  }
-  next();
-}
-
-function loadFbxFirst(urls, onLoad, onFail) {
-  let i = 0;
-  const fbxL = new FBXLoader();
-  function next() {
-    if (i >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    fbxL.load(
-      urls[i++],
-      (m) => onLoad(m),
-      undefined,
-      next
-    );
-  }
-  next();
-}
-
 function sendPose() {
   if (aplicandoRemoto || !astroRoot) return;
   const msg = {
     tipo: "modelo",
+    playerId: LOCAL_PLAYER_ID,
+    playerName: LOCAL_PLAYER_NAME,
     pos: astroRoot.position.toArray(),
     rotY: astroRoot.rotation.y
   };
@@ -234,36 +257,35 @@ function sendPose() {
 function manejarRemoto(d) {
   if (!d) return;
   if (d.tipo === "pedirSync") {
-    sendPose();
+    if (!d.playerId || d.playerId !== LOCAL_PLAYER_ID) sendPose();
     return;
   }
-  if (d.tipo !== "modelo" || !astroRoot) return;
+  if (d.tipo !== "modelo" || !d.playerId || typeof d.playerId !== "string") return;
+  if (d.playerId === LOCAL_PLAYER_ID) return;
   const pos = d.pos;
   const rotY = d.rotY;
   if (!Array.isArray(pos) || pos.length < 3 || typeof rotY !== "number" || !isFinite(rotY)) {
     return;
   }
-  aplicandoRemoto = true;
-  astroRoot.position.set(pos[0], pos[1], pos[2]);
-  astroRoot.rotation.y = rotY;
-  wander.x = pos[0];
-  wander.z = pos[2];
-  wander.lastRot = rotY;
-  const gw = d.gunWorld;
-  if (gw && typeof gw === "object" && gunRoot) {
-    if (typeof gw.x === "number" && isFinite(gw.x)) gunWorld.x = gw.x;
-    if (typeof gw.y === "number" && isFinite(gw.y)) gunWorld.y = gw.y;
-    if (typeof gw.z === "number" && isFinite(gw.z)) gunWorld.z = gw.z;
-    gunRoot.position.set(gunWorld.x, gunWorld.y, gunWorld.z);
+  const rp = remotePlayers.get(d.playerId);
+  if (rp) {
+    rp.targetPos.set(pos[0], pos[1], pos[2]);
+    rp.targetRotY = rotY;
+    const g2 = d.gun2World;
+    if (g2 && typeof g2 === "object") {
+      if (typeof g2.x === "number" && isFinite(g2.x)) rp.gun2World.x = g2.x;
+      if (typeof g2.y === "number" && isFinite(g2.y)) rp.gun2World.y = g2.y;
+      if (typeof g2.z === "number" && isFinite(g2.z)) rp.gun2World.z = g2.z;
+    }
+    if (d.playerName && d.playerName !== rp.playerName) {
+      rp.playerName = d.playerName;
+      updateNameTag(rp.group, d.playerName);
+    }
+    return;
   }
-  const g2 = d.gun2World;
-  if (g2 && typeof g2 === "object" && gun2Root) {
-    if (typeof g2.x === "number" && isFinite(g2.x)) gun2World.x = g2.x;
-    if (typeof g2.y === "number" && isFinite(g2.y)) gun2World.y = g2.y;
-    if (typeof g2.z === "number" && isFinite(g2.z)) gun2World.z = g2.z;
-    gun2Root.position.set(gun2World.x, gun2World.y, gun2World.z);
-  }
-  aplicandoRemoto = false;
+  if (remotePlayersLoading.has(d.playerId)) return;
+  remotePlayersLoading.add(d.playerId);
+  spawnRemotePlayer(d.playerId, pos, rotY, d.playerName, d.gun2World);
 }
 
 function bindKeys() {
@@ -348,14 +370,46 @@ function bindKeys() {
   });
 }
 
+function bindMouseLook() {
+  if (!canvas) return;
+  canvas.addEventListener("click", () => {
+    if (document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock?.();
+    }
+    canvas.focus({ preventScroll: true });
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (document.pointerLockElement !== canvas) return;
+    mouseLook.targetYaw -= e.movementX * mouseLook.sensitivity;
+    mouseLook.pitch -= e.movementY * mouseLook.sensitivity;
+    mouseLook.pitch = Math.max(mouseLook.pitchMin, Math.min(mouseLook.pitchMax, mouseLook.pitch));
+  });
+  window.addEventListener(
+    "wheel",
+    (e) => {
+      const next = camZoom.targetDist + e.deltaY * camZoom.wheelStep;
+      camZoom.targetDist = Math.max(camZoom.minDist, Math.min(camZoom.maxDist, next));
+      e.preventDefault();
+    },
+    { passive: false }
+  );
+}
+
 function tickMovement() {
   if (!astroRoot) return;
-  let mx = 0;
-  let mz = 0;
-  if (keys.w) mz -= 1;
-  if (keys.s) mz += 1;
-  if (keys.a) mx -= 1;
-  if (keys.d) mx += 1;
+  let forward = 0;
+  let strafe = 0;
+  if (keys.w) forward += 1;
+  if (keys.s) forward -= 1;
+  if (keys.d) strafe += 1;
+  if (keys.a) strafe -= 1;
+
+  const yawStep = shortestAngleDelta(astroRoot.rotation.y, mouseLook.targetYaw);
+  astroRoot.rotation.y += yawStep * 0.22;
+  wander.lastRot = astroRoot.rotation.y;
+
+  let mx = Math.sin(astroRoot.rotation.y) * forward + -Math.cos(astroRoot.rotation.y) * strafe;
+  let mz = Math.cos(astroRoot.rotation.y) * forward + Math.sin(astroRoot.rotation.y) * strafe;
   const l = Math.hypot(mx, mz) || 1;
   mx /= l;
   mz /= l;
@@ -363,24 +417,24 @@ function tickMovement() {
   if (mx || mz) {
     wander.x = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.x + mx * sp));
     wander.z = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.z + mz * sp));
-    wander.lastRot = Math.atan2(mx, mz) + Math.PI;
   }
   astroRoot.position.x = wander.x;
   astroRoot.position.z = wander.z;
-  astroRoot.rotation.y = wander.lastRot;
   const t = performance.now() * 0.001;
   astroRoot.position.y = 0.02 * Math.sin(t * 1.12);
 
   const p = astroRoot.position;
   const r = astroRoot.rotation.y;
-  const tx = p.x - Math.sin(r) * camSegui.dist;
-  const ty = p.y + camSegui.alto;
-  const tz = p.z - Math.cos(r) * camSegui.dist;
+  camSegui.dist += (camZoom.targetDist - camSegui.dist) * 0.18;
+  const distPlano = camSegui.dist * Math.cos(mouseLook.pitch);
+  const tx = p.x - Math.sin(r) * distPlano;
+  const ty = p.y + camSegui.alto + camSegui.dist * Math.sin(mouseLook.pitch);
+  const tz = p.z - Math.cos(r) * distPlano;
   const s = camSegui.suav;
   camera.position.x += (tx - camera.position.x) * s;
   camera.position.y += (ty - camera.position.y) * s;
   camera.position.z += (tz - camera.position.z) * s;
-  camera.lookAt(p.x, p.y + 0.55, p.z);
+  camera.lookAt(p.x, p.y + 1.15, p.z);
 
   if (gunRoot) {
     if (!aplicandoRemoto) {
@@ -400,23 +454,23 @@ function tickMovement() {
 
   if (gun2Root) {
     if (!aplicandoRemoto) {
-      if (keysGun2.v) gun2World.z -= GUN_NUDGE;
-      if (keysGun2.b) gun2World.z += GUN_NUDGE;
-      if (keysGun2.c) gun2World.x -= GUN_NUDGE;
-      if (keysGun2.n) gun2World.x += GUN_NUDGE;
+      applyGun2Input(gun2World, keysGun2, GUN_NUDGE);
     }
-    gun2World.x = Math.max(-GUN_ARENA, Math.min(GUN_ARENA, gun2World.x));
-    gun2World.z = Math.max(-GUN_ARENA, Math.min(GUN_ARENA, gun2World.z));
-    gun2World.y = Math.max(0.15, Math.min(2.2, gun2World.y));
-
-    const bob2 = Math.cos(t * 8 + 1.1) * 0.008;
-    gun2Root.rotation.z = -0.22 + Math.sin(t * 8 + 1.1) * 0.02;
-    gun2Root.position.set(gun2World.x, gun2World.y + bob2, gun2World.z);
+    clampGun2LocalOffset(gun2World);
+    applyGun2LocalTransform(gun2Root, gun2World, t, GUN2_ROTATION);
   }
 
   if (!aplicandoRemoto) {
     sendPose();
   }
+
+  remotePlayers.forEach((rp) => {
+    if (!rp.group) return;
+    rp.group.position.lerp(rp.targetPos, 0.2);
+    const dYaw = shortestAngleDelta(rp.group.rotation.y, rp.targetRotY);
+    rp.group.rotation.y += dYaw * 0.2;
+    applyGun2RemoteTransform(rp.gun2Root, rp.gun2World, t, GUN2_ROTATION);
+  });
 }
 
 function animate() {
@@ -429,8 +483,8 @@ let astroColocado = false;
 
 function tryAstroPng(pi, obj, group) {
   if (pi >= PNG_URLS.length) {
-    applyAstroBlue(obj);
-    prepAstroComoArena(obj);
+    applyAstroNeutral(obj);
+    prepAstroComoArena(obj, ASTRO_SCALE);
     loadGunAndFinish(group);
     return;
   }
@@ -438,8 +492,8 @@ function tryAstroPng(pi, obj, group) {
   txL.load(
     PNG_URLS[pi],
     (tex) => {
-      applyTextureBlueSuit(obj, prepTex(tex));
-      prepAstroComoArena(obj);
+      applyTextureToAstro(obj, prepTex(tex, aniso));
+      prepAstroComoArena(obj, ASTRO_SCALE);
       loadGunAndFinish(group);
     },
     undefined,
@@ -447,23 +501,15 @@ function tryAstroPng(pi, obj, group) {
   );
 }
 
-function setupGunMesh(gun, gunTex) {
-  configureGunMaterials(gun, gunTex);
-  gun.scale.setScalar(0.014 * WORLD_GROUP_SCALE);
-  gun.rotation.set(0.08, Math.PI / 2, -0.22);
-  gun.name = "weapon-model";
-  gun.position.set(gunWorld.x, gunWorld.y, gunWorld.z);
-}
-
 function loadGun2AndPlace(astroGroup, gun1) {
   loadTextureFirst(
     pathsFor("gun2/gun2.png"),
     (gunTex) => {
-      prepTex(gunTex);
+      prepTex(gunTex, aniso);
       loadFbxFirst(
         pathsFor("gun2/gun2.fbx"),
         (gun2) => {
-          setupGunMesh(gun2, gunTex);
+          setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
           gun2.name = "weapon-gun2";
           placeInScene(astroGroup, gun1, gun2);
         },
@@ -474,7 +520,7 @@ function loadGun2AndPlace(astroGroup, gun1) {
       loadFbxFirst(
         pathsFor("gun2/gun2.fbx"),
         (gun2) => {
-          setupGunMesh(gun2, null);
+          setupGunMesh(gun2, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
           gun2.name = "weapon-gun2";
           placeInScene(astroGroup, gun1, gun2);
         },
@@ -485,30 +531,101 @@ function loadGun2AndPlace(astroGroup, gun1) {
 }
 
 function loadGunAndFinish(astroGroup) {
+  loadGun2AndPlace(astroGroup, null);
+}
+
+function tryRemoteAstroPng(pi, obj, onDone) {
+  if (pi >= PNG_URLS.length) {
+    applyAstroNeutral(obj);
+    prepAstroComoArena(obj, ASTRO_SCALE);
+    onDone();
+    return;
+  }
+  const txL = new THREE.TextureLoader();
+  txL.load(
+    PNG_URLS[pi],
+    (tex) => {
+      applyTextureToAstro(obj, prepTex(tex, aniso));
+      prepAstroComoArena(obj, ASTRO_SCALE);
+      onDone();
+    },
+    undefined,
+    () => tryRemoteAstroPng(pi + 1, obj, onDone)
+  );
+}
+
+function loadRemoteGun2(playerId, gun2Start) {
+  const rp = remotePlayers.get(playerId);
+  if (!rp) return;
   loadTextureFirst(
-    pathsFor("gun1/gun1.png"),
+    pathsFor("gun2/gun2.png"),
     (gunTex) => {
-      prepTex(gunTex);
+      prepTex(gunTex, aniso);
       loadFbxFirst(
-        pathsFor("gun1/gun1.fbx"),
-        (gun) => {
-          setupGunMesh(gun, gunTex);
-          gun.name = "weapon-gun1";
-          loadGun2AndPlace(astroGroup, gun);
+        pathsFor("gun2/gun2.fbx"),
+        (gun2) => {
+          const start = gun2Start || rp.gun2World;
+          setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
+          gun2.name = `weapon-gun2-${playerId}`;
+          rp.group.add(gun2);
+          rp.gun2Root = gun2;
         },
-        () => loadGun2AndPlace(astroGroup, null)
+        () => {
+          /* no-op */
+        }
       );
     },
     () => {
       loadFbxFirst(
-        pathsFor("gun1/gun1.fbx"),
-        (gun) => {
-          setupGunMesh(gun, null);
-          gun.name = "weapon-gun1";
-          loadGun2AndPlace(astroGroup, gun);
+        pathsFor("gun2/gun2.fbx"),
+        (gun2) => {
+          const start = gun2Start || rp.gun2World;
+          setupGunMesh(gun2, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
+          gun2.name = `weapon-gun2-${playerId}`;
+          rp.group.add(gun2);
+          rp.gun2Root = gun2;
         },
-        () => loadGun2AndPlace(astroGroup, null)
+        () => {
+          /* no-op */
+        }
       );
+    }
+  );
+}
+
+function spawnRemotePlayer(playerId, pos, rotY, playerName, gun2Remote) {
+  const remoteGun2 = {
+    x: typeof gun2Remote?.x === "number" && isFinite(gun2Remote.x) ? gun2Remote.x : gun2World.x,
+    y: typeof gun2Remote?.y === "number" && isFinite(gun2Remote.y) ? gun2Remote.y : gun2World.y,
+    z: typeof gun2Remote?.z === "number" && isFinite(gun2Remote.z) ? gun2Remote.z : gun2World.z
+  };
+  loadFbxFirst(
+    FBX_URLS,
+    (obj) => {
+      const group = new THREE.Group();
+      group.name = `astro-remote-${playerId}`;
+      obj.name = "astro-mesh-remote";
+      group.add(obj);
+      tryRemoteAstroPng(0, obj, () => {
+        group.scale.setScalar(WORLD_GROUP_SCALE);
+        group.position.set(pos[0], pos[1], pos[2]);
+        group.rotation.y = rotY;
+        updateNameTag(group, playerName || compactPlayerId(playerId));
+        scene.add(group);
+        remotePlayers.set(playerId, {
+          group,
+          gun2Root: null,
+          gun2World: remoteGun2,
+          playerName: playerName || compactPlayerId(playerId),
+          targetPos: new THREE.Vector3(pos[0], pos[1], pos[2]),
+          targetRotY: rotY
+        });
+        loadRemoteGun2(playerId, remoteGun2);
+        remotePlayersLoading.delete(playerId);
+      });
+    },
+    () => {
+      remotePlayersLoading.delete(playerId);
     }
   );
 }
@@ -519,10 +636,9 @@ function loadFbxWithFallback(index) {
     return;
   }
   const url = FBX_URLS[index];
-  const loader = new FBXLoader();
-  setStatus("Cargando astronauta y armas (gun1, gun2)…", null);
-  loader.load(
-    url,
+  setStatus("Cargando astronauta y arma (gun2)…", null);
+  loadFbxFirst(
+    [url],
     (obj) => {
       const group = new THREE.Group();
       group.name = "astro-sync-root";
@@ -530,7 +646,6 @@ function loadFbxWithFallback(index) {
       group.add(obj);
       tryAstroPng(0, obj, group);
     },
-    undefined,
     () => loadFbxWithFallback(index + 1)
   );
 }
@@ -541,6 +656,15 @@ function placeInScene(astroGroup, gun, gun2) {
   astroGroup.scale.setScalar(WORLD_GROUP_SCALE);
   scene.add(astroGroup);
   astroRoot = astroGroup;
+  const mySpawn = spawnForPlayer(LOCAL_PLAYER_ID);
+  wander.x = mySpawn.x;
+  wander.z = mySpawn.z;
+  wander.lastRot = mySpawn.yaw;
+  mouseLook.targetYaw = mySpawn.yaw;
+  astroRoot.position.x = mySpawn.x;
+  astroRoot.position.z = mySpawn.z;
+  astroRoot.rotation.y = mySpawn.yaw;
+  updateNameTag(astroGroup, LOCAL_PLAYER_LABEL);
   if (gun) {
     gunRoot = gun;
     scene.add(gun);
@@ -548,12 +672,12 @@ function placeInScene(astroGroup, gun, gun2) {
   }
   if (gun2) {
     gun2Root = gun2;
-    scene.add(gun2);
+    astroGroup.add(gun2);
     gun2.position.set(gun2World.x, gun2World.y, gun2World.z);
   }
-  setStatus("Listo. WASD · IJKO (arma 1) · CVBN (arma 2) · sync.", true);
+  setStatus("Listo. WASD mover · mouse rotar cámara/personaje · CVBN (arma 2) · sync.", true);
   queueMicrotask(() => {
-    enviarVista({ tipo: "pedirSync" });
+    enviarVista({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
     if (getVentanaId() !== "2") {
       sendPose();
     }
@@ -561,6 +685,7 @@ function placeInScene(astroGroup, gun, gun2) {
 }
 
 bindKeys();
+bindMouseLook();
 if (canvas) {
   canvas.addEventListener("click", () => canvas.focus({ preventScroll: true }));
 }
@@ -580,7 +705,7 @@ iniciarVistaSync()
     window.__PINTAGOL_VISTA_TRANSPORT__ = getTransportLabel;
     onVistaMessage(manejarRemoto);
     setVistaEstadoElement(document.getElementById("estado-red"));
-    enviarVista({ tipo: "pedirSync" });
+    enviarVista({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
   })
   .catch((e) => {
     console.error(e);

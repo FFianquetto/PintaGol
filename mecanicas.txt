@@ -1,0 +1,11 @@
+-recarga manual del jugador en cualquier momento 
+-barra de munición acorde al arma (8 balas para la pistola / 8 para la escopeta / 16 para el subfusil / )
+-barra de llenado del índice de pintura al jugador (si la barra se llena, el equipo pierde a un jugador pero este aun sigue jugando)
+-la pintura puede desaparecer con el tiempo si no recibe daño el jugador
+-la barra de la pintura puede ser llenada mas rápido dependiendo de la distancia del arma y si mas de un jugador ataca al mismo objetivo
+-en la modelado de juego por equipo no hay daño aliado
+-el jugador puede cubrirse en las estructuras
+-si el lado de la estructura en la que se esta usando como cobertura tiene pintura, esta también llena la barra de pintura, pero de forma mas lenta
+-cuando haya una diferencia de 2 vs 3 o 1 vs 2, el juego entra en modo de "Muerte súbita" y el equipo con menos equipos ahora aumenta el doble de rapidez la barra de llenado de pintura
+-la partida tendrá un tiempo de 5 minutos 
+-si al final de la partida, quedan la misma cantidad de jugadores "vivos" el juego termina con empate
