@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 
 export function applyAstroNeutral(obj) {
   obj.traverse((child) => {
@@ -71,6 +72,14 @@ export function setupGunMesh(gun, gunTex, worldScale, position, options = {}) {
   gun.position.set(position.x, position.y, position.z);
 }
 
+export function setupBulletMesh(bullet, bulletTex, worldScale, options = {}) {
+  const { scale = 0.006, rotationX = 0, rotationY = 0, rotationZ = 0 } = options;
+  configureGunMaterials(bullet, bulletTex);
+  bullet.scale.setScalar(scale * worldScale);
+  bullet.rotation.set(rotationX, rotationY, rotationZ);
+  bullet.name = "bullet-model";
+}
+
 export function loadTextureFirst(urls, onLoad, onFail) {
   let i = 0;
   const txL = new THREE.TextureLoader();
@@ -98,6 +107,24 @@ export function loadFbxFirst(urls, onLoad, onFail) {
       return;
     }
     fbxL.load(
+      urls[i++],
+      (m) => onLoad(m),
+      undefined,
+      next
+    );
+  }
+  next();
+}
+
+export function loadObjFirst(urls, onLoad, onFail) {
+  let i = 0;
+  const objL = new OBJLoader();
+  function next() {
+    if (i >= urls.length) {
+      if (onFail) onFail();
+      return;
+    }
+    objL.load(
       urls[i++],
       (m) => onLoad(m),
       undefined,
