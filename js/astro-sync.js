@@ -26,11 +26,18 @@ import {
   applyGun2RemoteTransform
 } from "./astro-sync-gun.js";
 import { spawnBullet, spawnBulletAtPosition, updateBullets } from "./astro-sync-bullets.js";
+import {
+  resolveLocalPlayerName,
+  resolveLocalPlayerId,
+  showLocalPlayerName,
+  compactPlayerId,
+  spawnForPlayer
+} from "./astro-sync-player.js";
 
 const FBX_URLS = ["assets/models/astro/astronout.fbx", "/assets/models/astro/astronout.fbx"];
 const PNG_URLS = ["assets/models/astro/astronout.jpg", "/assets/models/astro/astronout.jpg"];
 
-/** Mismas bases que multijugador (assets.js) para encontrar gun1 / gun2. */
+/** Mismas bases que multijugador (assets.js) para encontrar modelos. */
 const MODEL_BASES = ["assets/models/", "/assets/models/", "../assets/models/"];
 
 const ASTRO_BORDE = 18;
@@ -41,6 +48,12 @@ const camZoom = {
   maxDist: 13.5,
   targetDist: 8.4,
   wheelStep: 0.0022
+};
+const aimCamera = {
+  dist: 0.95,
+  alto: 2.05,
+  lookAhead: 8.2,
+  smooth: 0.28
 };
 const mouseLook = {
   targetYaw: 0,
@@ -57,7 +70,6 @@ const WORLD_GROUP_SCALE = 0.52;
 /** Offset local del arma 2 respecto al astronauta (CVBN). */
 const gun2World = { x: -0.55, y: 2.99, z: 1.8 };
 const GUN_NUDGE = 0.028;
-const GUN_ARENA = 4.2;
 const GUN2_SCALE = 0.008;
 const GUN2_ROTATION = { rotationX: Math.PI / 4.5, rotationY: -1.8, rotationZ: 0 };
 const BULLET_SCALE = 0.019;
@@ -77,54 +89,13 @@ const PLAYER_SPAWNS = [
 const canvas = document.getElementById("astro-canvas");
 const statusEl = document.getElementById("astro-status");
 const playerNameHud = document.getElementById("astro-player-name");
-const ACTIVE_MATCH_KEY = "pintagol_active_match";
-const LOCAL_PLAYER_ID_KEY = "astro_sync_player_id";
-
-function resolveLocalPlayerName() {
-  const q = new URLSearchParams(window.location.search);
-  const fromQuery = q.get("playerName");
-  if (fromQuery && fromQuery.trim()) return fromQuery.trim();
-  try {
-    const raw = window.sessionStorage.getItem(ACTIVE_MATCH_KEY);
-    if (!raw) return "";
-    const o = JSON.parse(raw);
-    if (o && typeof o.playerName === "string" && o.playerName.trim()) return o.playerName.trim();
-  } catch (_) {
-    /* ignorar */
-  }
-  return "";
-}
-
-function resolveLocalPlayerId() {
-  try {
-    const saved = window.sessionStorage.getItem(LOCAL_PLAYER_ID_KEY);
-    if (saved && saved.trim()) return saved.trim();
-  } catch (_) {
-    /* ignorar */
-  }
-  const fromName = resolveLocalPlayerName();
-  const base = fromName ? fromName.replace(/\s+/g, "_") : "jugador";
-  const generated = `${base}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  try {
-    window.sessionStorage.setItem(LOCAL_PLAYER_ID_KEY, generated);
-  } catch (_) {
-    /* ignorar */
-  }
-  return generated;
-}
-
-const LOCAL_PLAYER_ID = resolveLocalPlayerId();
 const LOCAL_PLAYER_NAME = resolveLocalPlayerName();
+const LOCAL_PLAYER_ID = resolveLocalPlayerId(LOCAL_PLAYER_NAME);
 const LOCAL_PLAYER_LABEL = LOCAL_PLAYER_NAME || "Jugador";
 let localPlayerColor = PLAYER_COLORS[0];
 
-(function showLocalPlayerName() {
-  const name = resolveLocalPlayerName();
-  if (playerNameHud) {
-    playerNameHud.textContent = name ? `Jugador: ${name}` : "";
-    if (!name) playerNameHud.setAttribute("hidden", "");
-    else playerNameHud.removeAttribute("hidden");
-  }
+(function renderLocalPlayerNameHud() {
+  showLocalPlayerName(playerNameHud, LOCAL_PLAYER_NAME);
 })();
 
 function setStatus(msg, ok) {
@@ -159,14 +130,12 @@ scene.add(new THREE.GridHelper(140, 140, 0x475569, 0x1e293b));
 
 const wander = { x: 0, z: 0, lastRot: 0 };
 const keys = { w: false, a: false, s: false, d: false };
-const keysGun = { i: false, j: false, k: false, o: false };
 const keysGun2 = { c: false, v: false, b: false, n: false };
 let aplicandoRemoto = false;
 let fireQueued = false;
+let isAiming = false;
 /** Solo astronauta (WASD). @type {THREE.Group | null} */
 let astroRoot = null;
-/** Arma 1 (IJKO); no es hija del astronauta. @type {THREE.Object3D | null} */
-let gunRoot = null;
 /** Arma 2 (CVBN). @type {THREE.Object3D | null} */
 let gun2Root = null;
 /** Plantilla del modelo de bala cargado desde assets/models/bullet. */
@@ -188,19 +157,6 @@ function shortestAngleDelta(from, to) {
   let d = (to - from + Math.PI) % TAU;
   if (d < 0) d += TAU;
   return d - Math.PI;
-}
-
-function compactPlayerId(id) {
-  if (!id || typeof id !== "string") return "Jugador";
-  return id.length > 10 ? id.slice(0, 10) : id;
-}
-
-function spawnIndexFromPlayerId(playerId) {
-  let hash = 0;
-  for (let i = 0; i < playerId.length; i += 1) {
-    hash = (hash * 33 + playerId.charCodeAt(i)) >>> 0;
-  }
-  return hash % PLAYER_SPAWNS.length;
 }
 
 function recomputePlayerColors() {
@@ -268,8 +224,11 @@ function refreshAstronautStain(astroGroup, nowMs) {
   applyAstroCurrentTint(astroGroup, mixed.getHex());
 }
 
-function spawnForPlayer(playerId) {
-  return PLAYER_SPAWNS[spawnIndexFromPlayerId(playerId)] || PLAYER_SPAWNS[0];
+function setAimMode(active) {
+  isAiming = !!active;
+  if (!astroRoot) return;
+  const astroMesh = astroRoot.getObjectByName("astro-mesh");
+  if (astroMesh) astroMesh.visible = !isAiming;
 }
 
 function createNameTagSprite(labelText, hitRatio = 0) {
@@ -343,9 +302,6 @@ function sendPose() {
     colorHex: localPlayerColor,
     lastHitColorHex: localLastHitColorHex
   };
-  if (gunRoot) {
-    msg.gunWorld = { x: gunWorld.x, y: gunWorld.y, z: gunWorld.z };
-  }
   if (gun2Root) {
     msg.gun2World = { x: gun2World.x, y: gun2World.y, z: gun2World.z };
   }
@@ -414,7 +370,7 @@ function manejarRemoto(d) {
   }
   if (remotePlayersLoading.has(d.playerId)) return;
   remotePlayersLoading.add(d.playerId);
-  spawnRemotePlayer(d.playerId, pos, rotY, d.playerName, d.gun2World, d.hits, d.defeated, d.damageSeq);
+  spawnRemotePlayer(d.playerId, d.playerName, d.gun2World, d.hits, d.defeated, d.damageSeq);
 }
 
 function handleRemoteShot(d) {
@@ -491,22 +447,6 @@ function bindKeys() {
         keys.d = true;
         e.preventDefault();
       }
-      if (c === "KeyI") {
-        keysGun.i = true;
-        e.preventDefault();
-      }
-      if (c === "KeyJ") {
-        keysGun.j = true;
-        e.preventDefault();
-      }
-      if (c === "KeyK") {
-        keysGun.k = true;
-        e.preventDefault();
-      }
-      if (c === "KeyO") {
-        keysGun.o = true;
-        e.preventDefault();
-      }
       if (c === "KeyC") {
         keysGun2.c = true;
         e.preventDefault();
@@ -534,10 +474,6 @@ function bindKeys() {
       if (c === "KeyS" || c === "ArrowDown") keys.s = false;
       if (c === "KeyA" || c === "ArrowLeft") keys.a = false;
       if (c === "KeyD" || c === "ArrowRight") keys.d = false;
-      if (c === "KeyI") keysGun.i = false;
-      if (c === "KeyJ") keysGun.j = false;
-      if (c === "KeyK") keysGun.k = false;
-      if (c === "KeyO") keysGun.o = false;
       if (c === "KeyC") keysGun2.c = false;
       if (c === "KeyV") keysGun2.v = false;
       if (c === "KeyB") keysGun2.b = false;
@@ -547,9 +483,9 @@ function bindKeys() {
   );
   window.addEventListener("blur", () => {
     keys.w = keys.a = keys.s = keys.d = false;
-    keysGun.i = keysGun.j = keysGun.k = keysGun.o = false;
     keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;
     fireQueued = false;
+    setAimMode(false);
   });
 }
 
@@ -577,8 +513,26 @@ function bindMouseLook() {
     { passive: false }
   );
   canvas.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-    fireQueued = true;
+    if (e.button === 0) {
+      fireQueued = true;
+      return;
+    }
+    if (e.button === 2) {
+      setAimMode(true);
+      e.preventDefault();
+    }
+  });
+  canvas.addEventListener("mouseup", (e) => {
+    if (e.button !== 2) return;
+    setAimMode(false);
+    e.preventDefault();
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (e.button !== 2) return;
+    setAimMode(false);
+  });
+  canvas.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
   });
 }
 
@@ -719,31 +673,24 @@ function tickMovement(dt) {
 
   const p = astroRoot.position;
   const r = astroRoot.rotation.y;
-  camSegui.dist += (camZoom.targetDist - camSegui.dist) * 0.18;
+  const desiredDist = isAiming ? aimCamera.dist : camZoom.targetDist;
+  camSegui.dist += (desiredDist - camSegui.dist) * 0.18;
+  const cameraHeight = isAiming ? aimCamera.alto : camSegui.alto;
   const distPlano = camSegui.dist * Math.cos(mouseLook.pitch);
   const tx = p.x - Math.sin(r) * distPlano;
-  const ty = p.y + camSegui.alto + camSegui.dist * Math.sin(mouseLook.pitch);
+  const ty = p.y + cameraHeight + camSegui.dist * Math.sin(mouseLook.pitch);
   const tz = p.z - Math.cos(r) * distPlano;
-  const s = camSegui.suav;
+  const s = isAiming ? aimCamera.smooth : camSegui.suav;
   camera.position.x += (tx - camera.position.x) * s;
   camera.position.y += (ty - camera.position.y) * s;
   camera.position.z += (tz - camera.position.z) * s;
-  camera.lookAt(p.x, p.y + 1.15, p.z);
-
-  if (gunRoot) {
-    if (!aplicandoRemoto) {
-      if (keysGun.i) gunWorld.z -= GUN_NUDGE;
-      if (keysGun.k) gunWorld.z += GUN_NUDGE;
-      if (keysGun.j) gunWorld.x -= GUN_NUDGE;
-      if (keysGun.o) gunWorld.x += GUN_NUDGE;
-    }
-    gunWorld.x = Math.max(-GUN_ARENA, Math.min(GUN_ARENA, gunWorld.x));
-    gunWorld.z = Math.max(-GUN_ARENA, Math.min(GUN_ARENA, gunWorld.z));
-    gunWorld.y = Math.max(0.15, Math.min(2.2, gunWorld.y));
-
-    const bobY = Math.cos(t * 8) * 0.008;
-    gunRoot.rotation.z = -0.22 + Math.sin(t * 8) * 0.02;
-    gunRoot.position.set(gunWorld.x, gunWorld.y + bobY, gunWorld.z);
+  if (isAiming) {
+    const lookX = p.x + Math.sin(r) * aimCamera.lookAhead;
+    const lookY = p.y + 1.72;
+    const lookZ = p.z + Math.cos(r) * aimCamera.lookAhead;
+    camera.lookAt(lookX, lookY, lookZ);
+  } else {
+    camera.lookAt(p.x, p.y + 1.15, p.z);
   }
 
   if (gun2Root) {
@@ -786,7 +733,7 @@ function tryAstroPng(pi, obj, group) {
   if (pi >= PNG_URLS.length) {
     applyAstroNeutral(obj);
     prepAstroComoArena(obj, ASTRO_SCALE);
-    loadGunAndFinish(group);
+    loadLocalModelsAndFinish(group);
     return;
   }
   const txL = new THREE.TextureLoader();
@@ -795,14 +742,14 @@ function tryAstroPng(pi, obj, group) {
     (tex) => {
       applyTextureToAstro(obj, prepTex(tex, aniso));
       prepAstroComoArena(obj, ASTRO_SCALE);
-      loadGunAndFinish(group);
+      loadLocalModelsAndFinish(group);
     },
     undefined,
     () => tryAstroPng(pi + 1, obj, group)
   );
 }
 
-function loadGun2AndPlace(astroGroup, gun1) {
+function loadGun2AndPlace(astroGroup) {
   loadTextureFirst(
     pathsFor("gun2/gun2.png"),
     (gunTex) => {
@@ -812,9 +759,9 @@ function loadGun2AndPlace(astroGroup, gun1) {
         (gun2) => {
           setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
           gun2.name = "weapon-gun2";
-          placeInScene(astroGroup, gun1, gun2);
+          placeInScene(astroGroup, gun2);
         },
-        () => placeInScene(astroGroup, gun1, null)
+        () => placeInScene(astroGroup, null)
       );
     },
     () => {
@@ -823,17 +770,17 @@ function loadGun2AndPlace(astroGroup, gun1) {
         (gun2) => {
           setupGunMesh(gun2, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
           gun2.name = "weapon-gun2";
-          placeInScene(astroGroup, gun1, gun2);
+          placeInScene(astroGroup, gun2);
         },
-        () => placeInScene(astroGroup, gun1, null)
+        () => placeInScene(astroGroup, null)
       );
     }
   );
 }
 
-function loadGunAndFinish(astroGroup) {
+function loadLocalModelsAndFinish(astroGroup) {
   loadBulletTemplate();
-  loadGun2AndPlace(astroGroup, null);
+  loadGun2AndPlace(astroGroup);
 }
 
 function loadBulletTemplate() {
@@ -912,8 +859,6 @@ function loadRemoteGun2(playerId, gun2Start) {
 
 function spawnRemotePlayer(
   playerId,
-  pos,
-  rotY,
   playerName,
   gun2Remote,
   remoteHits = 0,
@@ -933,7 +878,7 @@ function spawnRemotePlayer(
       obj.name = "astro-mesh-remote";
       group.add(obj);
       tryRemoteAstroPng(0, obj, () => {
-        const fixedSpawn = spawnForPlayer(playerId);
+        const fixedSpawn = spawnForPlayer(playerId, PLAYER_SPAWNS);
         const playerColor = PLAYER_COLORS[0];
         group.scale.setScalar(WORLD_GROUP_SCALE);
         group.position.set(fixedSpawn.x, 0, fixedSpawn.z);
@@ -985,13 +930,13 @@ function loadFbxWithFallback(index) {
   );
 }
 
-function placeInScene(astroGroup, gun, gun2) {
+function placeInScene(astroGroup, gun2) {
   if (astroColocado) return;
   astroColocado = true;
   astroGroup.scale.setScalar(WORLD_GROUP_SCALE);
   scene.add(astroGroup);
   astroRoot = astroGroup;
-  const mySpawn = spawnForPlayer(LOCAL_PLAYER_ID);
+  const mySpawn = spawnForPlayer(LOCAL_PLAYER_ID, PLAYER_SPAWNS);
   wander.x = mySpawn.x;
   wander.z = mySpawn.z;
   wander.lastRot = mySpawn.yaw;
@@ -1007,11 +952,6 @@ function placeInScene(astroGroup, gun, gun2) {
   localLastHitColorHex = 0xffffff;
   updateNameTag(astroGroup, LOCAL_PLAYER_LABEL, 0);
   recomputePlayerColors();
-  if (gun) {
-    gunRoot = gun;
-    scene.add(gun);
-    gun.position.set(gunWorld.x, gunWorld.y, gunWorld.z);
-  }
   if (gun2) {
     gun2Root = gun2;
     astroGroup.add(gun2);

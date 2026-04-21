@@ -3,8 +3,6 @@
 
   var textureLoader = new THREE.TextureLoader();
   var fbxLoader = new THREE.FBXLoader();
-  var mtlLoader = typeof THREE.MTLLoader === 'function' ? new THREE.MTLLoader() : null;
-  var objLoader = typeof THREE.OBJLoader === 'function' ? new THREE.OBJLoader() : null;
   var store = window.PintaGolMultiplayerStore;
   var MODEL_BASE_CANDIDATES = [
     'assets/models/',
@@ -53,57 +51,6 @@
         url,
         function (model) {
           onLoad(model, url);
-        },
-        undefined,
-        function () {
-          tryNext();
-        }
-      );
-    }
-    tryNext();
-  }
-
-  function loadObjFromCandidates(paths, onLoad, onError) {
-    var index = 0;
-    function tryNext() {
-      if (index >= paths.length) {
-        if (onError) onError(new Error('No se pudo cargar OBJ en ninguna ruta'));
-        return;
-      }
-      var url = paths[index++];
-      objLoader.load(
-        url,
-        function (model) {
-          onLoad(model, url);
-        },
-        undefined,
-        function () {
-          tryNext();
-        }
-      );
-    }
-    tryNext();
-  }
-
-  function loadMtlFromCandidates(paths, onLoad, onError) {
-    if (!mtlLoader) {
-      if (onError) onError(new Error('MTLLoader no disponible'));
-      return;
-    }
-    var index = 0;
-    function tryNext() {
-      if (index >= paths.length) {
-        if (onError) onError(new Error('No se pudo cargar MTL en ninguna ruta'));
-        return;
-      }
-      var url = paths[index++];
-      var folder = url.slice(0, url.lastIndexOf('/') + 1);
-      mtlLoader.setMaterialOptions({ side: THREE.DoubleSide });
-      mtlLoader.setResourcePath(folder + 'textures/');
-      mtlLoader.load(
-        url,
-        function (materials) {
-          onLoad(materials, folder);
         },
         undefined,
         function () {
@@ -361,138 +308,8 @@
     loadHeroModel(group);
   }
 
-  function buildPaintballTextureMap() {
-    var entries = {
-      floor: 'FloorBakeCycles.png',
-      outerwalls: 'OuterwallsCycles.png',
-      roof: 'RoofBakeCycles.png',
-      ceiling: 'RoofBakeCycles.png',
-      material: 'WallsBakeCycles.png',
-      walls: 'WallsBakeCycles.png'
-    };
-    var map = {};
-
-    Object.keys(entries).forEach(function (key) {
-      loadTextureFromCandidates(
-        buildCandidatePaths('paintball/textures/' + entries[key]),
-        function (texture) {
-          texture.colorSpace = THREE.SRGBColorSpace;
-          map[key] = texture;
-        }
-      );
-    });
-
-    return map;
-  }
-
-  function normalizeMaterialName(name) {
-    return String(name || '').trim().toLowerCase();
-  }
-
-  function applyPaintballTextures(object) {
-    var textureMap = buildPaintballTextureMap();
-    object.traverse(function (child) {
-      if (!child.isMesh || !child.material) return;
-
-      var materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach(function (material) {
-        if (!material) return;
-        var key = normalizeMaterialName(material.name);
-        var texture = textureMap[key] || null;
-        if (texture) {
-          material.map = texture;
-          material.color = new THREE.Color(0xffffff);
-          material.needsUpdate = true;
-        }
-      });
-    });
-  }
-
-  function loadPaintballArena(scene) {
-    if (!scene || !objLoader) return;
-    var modelRelativePath = 'paintball/';
-
-    function placeArena(arena) {
-      var box = new THREE.Box3().setFromObject(arena);
-      var center = new THREE.Vector3();
-      var size = new THREE.Vector3();
-      box.getCenter(center);
-      box.getSize(size);
-
-      arena.position.x -= center.x;
-      arena.position.z -= center.z;
-      arena.position.y -= box.min.y;
-      arena.position.y += -1.45;
-      arena.rotation.set(0, Math.PI, 0);
-      if (size.x > 0 && size.z > 0) {
-        var maxHorizontal = Math.max(size.x, size.z);
-        var targetSpan = 12;
-        var scale = targetSpan / maxHorizontal;
-        if (isFinite(scale) && scale > 0) {
-          arena.scale.setScalar(scale);
-          arena.updateMatrixWorld(true);
-        }
-      }
-      arena.name = 'paintball-arena';
-      scene.add(arena);
-      // Indicador visual pequeño para confirmar centro del mapa.
-      var marker = new THREE.Mesh(
-        new THREE.SphereGeometry(0.12, 14, 14),
-        new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0x7c2d12, emissiveIntensity: 0.9 })
-      );
-      marker.position.set(0, -1.2, 0);
-      marker.name = 'arena-center-marker';
-      scene.add(marker);
-    }
-
-    if (!mtlLoader) {
-      loadObjFromCandidates(
-        buildCandidatePaths(modelRelativePath + 'paintball.obj'),
-        function (arena) {
-          applyPaintballTextures(arena);
-          placeArena(arena);
-        },
-        function (error) {
-          console.error('No se pudo cargar paintball.obj', error);
-        }
-      );
-      return;
-    }
-
-    loadMtlFromCandidates(
-      buildCandidatePaths(modelRelativePath + 'paintball.mtl'),
-      function (materials) {
-        materials.preload();
-        objLoader.setMaterials(materials);
-        loadObjFromCandidates(
-          buildCandidatePaths(modelRelativePath + 'paintball.obj'),
-          function (arena) {
-            applyPaintballTextures(arena);
-            placeArena(arena);
-          },
-          function (error) {
-            console.error('No se pudo cargar paintball.obj', error);
-          }
-        );
-      },
-      function () {
-        loadObjFromCandidates(
-          buildCandidatePaths(modelRelativePath + 'paintball.obj'),
-          function (arena) {
-            applyPaintballTextures(arena);
-            placeArena(arena);
-          },
-          function (error) {
-            console.error('No se pudo cargar paintball.obj', error);
-          }
-        );
-      }
-    );
-  }
-
   window.PintaGolMultiplayerAssets = {
     loadHeroModel: loadHeroModel,
-    loadPaintballArena: loadPaintballArena,
     loadMultijugadorShowcase: loadMultijugadorShowcase,
     setRendererMaxAnisotropy: function (value) {
       if (typeof value === 'number' && isFinite(value) && value > 0) {

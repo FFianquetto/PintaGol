@@ -147,14 +147,6 @@
     setBuscarPartidaEnabled(canSearch());
   }
 
-  function setSlotsDisabled(disabled) {
-    document.querySelectorAll('.pais-slot').forEach(function (slot) {
-      slot.disabled = !!disabled;
-      slot.style.opacity = disabled ? '0.65' : '';
-      slot.style.pointerEvents = disabled ? 'none' : '';
-    });
-  }
-
   function setBuscarPartidaEnabled(enabled) {
     var btnBuscar = document.getElementById('btn-buscar-partida');
     if (btnBuscar) {

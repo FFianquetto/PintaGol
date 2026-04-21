@@ -50,15 +50,36 @@
       return false;
     }
 
+    function isGameReadyForRedirect(game) {
+      if (!game || game.status !== 'active' || !Array.isArray(game.players)) return false;
+      return game.players.length >= store.REQUIRED_PLAYERS;
+    }
+
+    function resolveLocalPlayerIdForGame(game) {
+      if (!game || !Array.isArray(game.players)) return localPlayerId;
+      if (isLocalPlayerInGame(game)) return localPlayerId;
+      for (var i = 0; i < game.players.length; i++) {
+        var player = game.players[i];
+        if (!player) continue;
+        var sameName = playerName && player.name === playerName;
+        var sameCountry = selectedCountryKey && player.country === selectedCountryKey;
+        if (sameName || sameCountry) {
+          return player.id || localPlayerId;
+        }
+      }
+      return localPlayerId;
+    }
+
     function goToGame(game) {
       if (redirectedToGame || !game || !game.id) return;
-      if (!isLocalPlayerInGame(game)) return;
+      localPlayerId = resolveLocalPlayerIdForGame(game);
       redirectedToGame = true;
       window.sessionStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify({
         gameId: game.id,
         country: selectedCountry,
         countryKey: selectedCountryKey,
-        playerName: playerName
+        playerName: playerName,
+        playerId: localPlayerId
       }));
       var cacheBust = Date.now();
       var dest =
@@ -86,7 +107,6 @@
 
     function refreshView() {
       if (!selectedCountry) return;
-
       var room = store.getRoom();
       var queuePlayers = store.getQueuePlayers(room);
 
@@ -98,6 +118,12 @@
           'Esperando a que se conecten ' + store.REQUIRED_PLAYERS + ' jugadores para iniciar.'
         );
         return;
+      }
+
+      var activeGame = store.getGame();
+      if (isGameReadyForRedirect(activeGame)) {
+        goToGame(activeGame);
+        if (redirectedToGame) return;
       }
 
       showStatus('Sala lista', 'Ya hay ' + store.REQUIRED_PLAYERS + ' jugadores conectados. Entrando a la partida.');
@@ -126,7 +152,7 @@
         if (event.key === store.ROOM_KEY || event.key === store.GAME_KEY) {
           refreshView();
           var game = store.getGame();
-          if (game && game.status === 'active' && isLocalPlayerInGame(game)) {
+          if (isGameReadyForRedirect(game)) {
             goToGame(game);
           }
         }

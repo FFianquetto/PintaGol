@@ -15,7 +15,7 @@ export function clampGun2LocalOffset(gun2World) {
   gun2World.y = Math.max(0.7, Math.min(2.8, gun2World.y));
 }
 
-export function applyGun2LocalTransform(gun2Root, gun2World, t, baseRotation) {
+function applyGun2Transform(gun2Root, gun2World, t, baseRotation) {
   if (!gun2Root || !gun2World) return;
   const baseX = baseRotation?.rotationX ?? 0;
   const baseY = baseRotation?.rotationY ?? 0;
@@ -25,12 +25,10 @@ export function applyGun2LocalTransform(gun2Root, gun2World, t, baseRotation) {
   gun2Root.position.set(gun2World.x, gun2World.y + bob2, gun2World.z);
 }
 
+export function applyGun2LocalTransform(gun2Root, gun2World, t, baseRotation) {
+  applyGun2Transform(gun2Root, gun2World, t, baseRotation);
+}
+
 export function applyGun2RemoteTransform(gun2Root, gun2World, t, baseRotation) {
-  if (!gun2Root || !gun2World) return;
-  const baseX = baseRotation?.rotationX ?? 0;
-  const baseY = baseRotation?.rotationY ?? 0;
-  const baseZ = baseRotation?.rotationZ ?? 0;
-  const bob2 = Math.cos(t * 8 + 1.1) * 0.008;
-  gun2Root.rotation.set(baseX, baseY, baseZ + Math.sin(t * 8 + 1.1) * 0.02);
-  gun2Root.position.set(gun2World.x, gun2World.y + bob2, gun2World.z);
+  applyGun2Transform(gun2Root, gun2World, t, baseRotation);
 }

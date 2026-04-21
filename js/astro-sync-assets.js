@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { loadFirstWithFallback } from "./astro-sync-loaders.js";
 
 export function applyAstroNeutral(obj) {
   obj.traverse((child) => {
@@ -81,55 +82,13 @@ export function setupBulletMesh(bullet, bulletTex, worldScale, options = {}) {
 }
 
 export function loadTextureFirst(urls, onLoad, onFail) {
-  let i = 0;
-  const txL = new THREE.TextureLoader();
-  function next() {
-    if (i >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    txL.load(
-      urls[i++],
-      (t) => onLoad(t),
-      undefined,
-      next
-    );
-  }
-  next();
+  loadFirstWithFallback(urls, new THREE.TextureLoader(), onLoad, onFail);
 }
 
 export function loadFbxFirst(urls, onLoad, onFail) {
-  let i = 0;
-  const fbxL = new FBXLoader();
-  function next() {
-    if (i >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    fbxL.load(
-      urls[i++],
-      (m) => onLoad(m),
-      undefined,
-      next
-    );
-  }
-  next();
+  loadFirstWithFallback(urls, new FBXLoader(), onLoad, onFail);
 }
 
 export function loadObjFirst(urls, onLoad, onFail) {
-  let i = 0;
-  const objL = new OBJLoader();
-  function next() {
-    if (i >= urls.length) {
-      if (onFail) onFail();
-      return;
-    }
-    objL.load(
-      urls[i++],
-      (m) => onLoad(m),
-      undefined,
-      next
-    );
-  }
-  next();
+  loadFirstWithFallback(urls, new OBJLoader(), onLoad, onFail);
 }

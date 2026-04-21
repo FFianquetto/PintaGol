@@ -20,6 +20,16 @@
   var minCameraHeight = 1.2;
   var maxCameraHeight = 8;
   var localKine = { x: 0, y: 0, z: 0, rotationY: Math.PI, _roomInit: false };
+  var CORNER_SPAWNS = [
+    { x: 4.5, z: -1.5, rotationY: (3 * Math.PI) / 4 },   // +-
+    { x: -4.5, z: 1.5, rotationY: -Math.PI / 4 },        // -+
+    { x: -4.5, z: -1.5, rotationY: Math.PI / 4 },        // --
+    { x: 4.5, z: 1.5, rotationY: (-3 * Math.PI) / 4 }    // ++
+  ];
+
+  function spawnForIndex(index) {
+    return CORNER_SPAWNS[((index % CORNER_SPAWNS.length) + CORNER_SPAWNS.length) % CORNER_SPAWNS.length];
+  }
 
   function getQueryParams() {
     return new URLSearchParams(window.location.search);
@@ -174,6 +184,9 @@
       var roomPlayers = (room && room.players ? room.players : []).filter(function (player) {
         return player && player.status !== 'waiting';
       });
+      roomPlayers.sort(function (a, b) {
+        return String(a && a.id || '').localeCompare(String(b && b.id || ''));
+      });
       if (!roomPlayers.length) {
         // Fallback de emergencia: posición local persistida (WASD).
         return applyWsRemote({
@@ -195,10 +208,11 @@
       if (!localKine._roomInit) {
         for (var ri = 0; ri < roomPlayers.length; ri++) {
           if (roomPlayers[ri].id === localPlayerId) {
-            localKine.x = -4 + (ri % 4) * 2.6;
-            localKine.z = Math.floor(ri / 4) * 2.2 - 1.1;
+            var spawn = spawnForIndex(ri);
+            localKine.x = spawn.x;
             localKine.y = 0;
-            localKine.rotationY = Math.PI;
+            localKine.z = spawn.z;
+            localKine.rotationY = spawn.rotationY;
             break;
           }
         }
@@ -210,17 +224,16 @@
         status: 'active',
         players: roomPlayers.map(function (player, index) {
           var isMe = player.id === localPlayerId;
-          var defX = -4 + (index % 4) * 2.6;
-          var defZ = Math.floor(index / 4) * 2.2 - 1.1;
+          var spawn = spawnForIndex(index);
           return {
             id: player.id,
             name: player.name || ('Jugador ' + (index + 1)),
             country: player.country || '',
             countryLabel: player.countryLabel || '',
-            x: isMe ? localKine.x : defX,
+            x: isMe ? localKine.x : spawn.x,
             y: isMe ? localKine.y : 0,
-            z: isMe ? localKine.z : defZ,
-            rotationY: isMe ? localKine.rotationY : Math.PI
+            z: isMe ? localKine.z : spawn.z,
+            rotationY: isMe ? localKine.rotationY : spawn.rotationY
           };
         })
       });

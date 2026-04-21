@@ -9,7 +9,6 @@
   var LOCK_TTL_MS = 1500;
   var STALE_MS = 15000;
   var REQUIRED_PLAYERS = 4;
-  var MAX_GAME_DURATION_MS = 0;
   var realtimeChannel = typeof window.BroadcastChannel === 'function'
     ? new window.BroadcastChannel(CHANNEL_KEY)
     : null;
@@ -47,6 +46,12 @@
     dinamarca: 0xdc2626,
     colombia: 0xfacc15
   };
+  var CORNER_SPAWNS = [
+    { x: 4.5, z: -1.5, rotationY: (3 * Math.PI) / 4 },   // +-
+    { x: -4.5, z: 1.5, rotationY: -Math.PI / 4 },        // -+
+    { x: -4.5, z: -1.5, rotationY: Math.PI / 4 },        // --
+    { x: 4.5, z: 1.5, rotationY: (-3 * Math.PI) / 4 }    // ++
+  ];
 
   function now() {
     return Date.now();
@@ -202,28 +207,28 @@
         return activeGame;
       }
 
-      var startingPositions = [
-        { x: -4.5, z: -1.5 },
-        { x: 4.5, z: -1.5 },
-        { x: -4.5, z: 1.5 },
-        { x: 4.5, z: 1.5 }
-      ];
+      var orderedPlayers = queuePlayers
+        .slice(0, REQUIRED_PLAYERS)
+        .sort(function (a, b) {
+          return String(a && a.id || '').localeCompare(String(b && b.id || ''));
+        });
 
       var game = {
         id: 'game-' + now(),
         status: 'active',
         createdAt: now(),
         endsAt: null,
-        players: queuePlayers.slice(0, REQUIRED_PLAYERS).map(function (player, index) {
+        players: orderedPlayers.map(function (player, index) {
+          var spawn = CORNER_SPAWNS[index % CORNER_SPAWNS.length];
           return {
             id: player.id,
             name: player.name,
             country: player.country,
             countryLabel: player.countryLabel,
-            x: startingPositions[index].x,
+            x: spawn.x,
             y: 0,
-            z: startingPositions[index].z,
-            rotationY: Math.PI,
+            z: spawn.z,
+            rotationY: spawn.rotationY,
             lastSeen: now()
           };
         })
@@ -283,13 +288,9 @@
     getRoom();
   }
 
-  function finishExpiredGame() {
-    // Temporizador desactivado: la partida no expira automáticamente.
-    return getGame();
-  }
-
   function getRemainingGameMs(game) {
-    if (!game || !game.endsAt) return 0;
+    if (!game) return 0;
+    if (!game.endsAt) return Number.POSITIVE_INFINITY;
     return Math.max(0, Number(game.endsAt) - now());
   }
 
@@ -340,7 +341,6 @@
     ROOM_KEY: ROOM_KEY,
     GAME_KEY: GAME_KEY,
     REQUIRED_PLAYERS: REQUIRED_PLAYERS,
-    MAX_GAME_DURATION_MS: MAX_GAME_DURATION_MS,
     getSessionId: getSessionId,
     subscribeRealtime: subscribeRealtime,
     getRoom: getRoom,
@@ -351,7 +351,6 @@
     getGame: getGame,
     clearFinishedGame: clearFinishedGame,
     prepareMatchmaking: prepareMatchmaking,
-    finishExpiredGame: finishExpiredGame,
     getRemainingGameMs: getRemainingGameMs,
     getCountryColor: getCountryColor,
     updateGamePlayer: updateGamePlayer,
