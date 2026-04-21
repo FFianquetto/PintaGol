@@ -314,6 +314,10 @@ function manejarRemoto(d) {
     if (!d.playerId || d.playerId !== LOCAL_PLAYER_ID) sendPose();
     return;
   }
+  if (d.tipo === "hit") {
+    handleRemoteHit(d);
+    return;
+  }
   if (d.tipo === "shot") {
     handleRemoteShot(d);
     return;
@@ -424,6 +428,24 @@ function handleRemoteDamage(d) {
   if (typeof d.defeated === "boolean") rp.defeated = d.defeated;
   if (typeof d.hitColorHex === "number") addHitStain(rp.group, d.hitColorHex);
   updateNameTag(rp.group, rp.playerName || compactPlayerId(d.playerId), rp.hits / MAX_HITS);
+}
+
+function handleRemoteHit(d) {
+  if (!d || typeof d.targetPlayerId !== "string") return;
+  if (d.targetPlayerId !== LOCAL_PLAYER_ID) return;
+  if (localDefeated) return;
+  const hitColorHex = typeof d.hitColorHex === "number" ? d.hitColorHex : 0xffffff;
+  addHitStain(astroRoot, hitColorHex);
+  applyHitToLocalPlayer(hitColorHex);
+  sendPose();
+  enviarVista({
+    tipo: "damage",
+    playerId: LOCAL_PLAYER_ID,
+    hits: localHits,
+    defeated: localDefeated,
+    hitColorHex,
+    damageSeq: localDamageSeq
+  });
 }
 
 function bindKeys() {
@@ -632,6 +654,22 @@ function processBulletHits() {
           damageSeq: localDamageSeq
         });
         consumed = true;
+      }
+    }
+    if (!consumed && ownerId === LOCAL_PLAYER_ID) {
+      for (const [targetPlayerId, rp] of remotePlayers) {
+        if (!rp || !rp.group || rp.defeated) continue;
+        if (bulletSegmentHitsAstronaut(prevPos, currPos, rp.group)) {
+          const hitColorHex = bullet.userData?.colorHex ?? localPlayerColor;
+          enviarVista({
+            tipo: "hit",
+            playerId: LOCAL_PLAYER_ID,
+            targetPlayerId,
+            hitColorHex
+          });
+          consumed = true;
+          break;
+        }
       }
     }
     if (consumed) {
