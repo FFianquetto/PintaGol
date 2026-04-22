@@ -30,8 +30,7 @@ import {
   resolveLocalPlayerName,
   resolveLocalPlayerId,
   showLocalPlayerName,
-  compactPlayerId,
-  spawnForPlayer
+  compactPlayerId
 } from "./astro-sync-player.js";
 
 const FBX_URLS = ["assets/models/astro/astronout.fbx", "/assets/models/astro/astronout.fbx"];
@@ -89,9 +88,15 @@ const PLAYER_SPAWNS = [
 const canvas = document.getElementById("astro-canvas");
 const statusEl = document.getElementById("astro-status");
 const playerNameHud = document.getElementById("astro-player-name");
+const defeatOverlayEl = document.getElementById("astro-defeat-overlay");
+const defeatTextEl = document.getElementById("astro-defeat-text");
+const watchMatchBtn = document.getElementById("astro-btn-watch");
+const goMenuBtn = document.getElementById("astro-btn-menu");
+const spectatorIndicatorEl = document.getElementById("astro-spectator-indicator");
 const LOCAL_PLAYER_NAME = resolveLocalPlayerName();
 const LOCAL_PLAYER_ID = resolveLocalPlayerId(LOCAL_PLAYER_NAME);
 const LOCAL_PLAYER_LABEL = LOCAL_PLAYER_NAME || "Jugador";
+const LOCAL_STATE_KEY = `pintagol_astro_state_${LOCAL_PLAYER_ID}`;
 let localPlayerColor = PLAYER_COLORS[0];
 
 (function renderLocalPlayerNameHud() {
@@ -144,12 +149,14 @@ const activeBullets = [];
 let lastShotAt = 0;
 let localHits = 0;
 let localDefeated = false;
+let spectatorMode = false;
 let localDamageSeq = 0;
 let localShotSeq = 0;
 let localLastHitColorHex = 0xffffff;
 const remotePlayers = new Map();
 const remotePlayersLoading = new Set();
 const seenRemoteShotIds = new Set();
+const spawnSlotByPlayer = new Map();
 const clock = new THREE.Clock();
 
 function shortestAngleDelta(from, to) {
@@ -229,6 +236,133 @@ function setAimMode(active) {
   if (!astroRoot) return;
   const astroMesh = astroRoot.getObjectByName("astro-mesh");
   if (astroMesh) astroMesh.visible = !isAiming;
+}
+
+function persistLocalCombatState() {
+  try {
+    window.sessionStorage.setItem(
+      LOCAL_STATE_KEY,
+      JSON.stringify({
+        hits: localHits,
+        defeated: localDefeated,
+        damageSeq: localDamageSeq,
+        lastHitColorHex: localLastHitColorHex
+      })
+    );
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function loadPersistedLocalCombatState() {
+  try {
+    const raw = window.sessionStorage.getItem(LOCAL_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const hits = Math.max(0, Math.min(MAX_HITS, Math.floor(Number(parsed.hits) || 0)));
+    const defeated = !!parsed.defeated || hits >= MAX_HITS;
+    const damageSeq = Math.max(0, Math.floor(Number(parsed.damageSeq) || 0));
+    const lastHitColorHex = typeof parsed.lastHitColorHex === "number" ? parsed.lastHitColorHex : 0xffffff;
+    return { hits, defeated, damageSeq, lastHitColorHex };
+  } catch (_err) {
+    return null;
+  }
+}
+
+function setDefeatOverlayVisible(visible, message) {
+  if (!defeatOverlayEl) return;
+  defeatOverlayEl.hidden = !visible;
+  if (visible && defeatTextEl && typeof message === "string" && message.trim()) {
+    defeatTextEl.textContent = message;
+  }
+}
+
+function bindDefeatActions() {
+  if (watchMatchBtn) {
+    watchMatchBtn.addEventListener("click", () => {
+      setDefeatOverlayVisible(false);
+      updateSpectatorIndicator();
+    });
+  }
+  if (goMenuBtn) {
+    goMenuBtn.addEventListener("click", () => {
+      window.location.href = "index.html";
+    });
+  }
+}
+
+function updateSpectatorIndicator() {
+  if (!spectatorIndicatorEl) return;
+  spectatorIndicatorEl.hidden = !spectatorMode;
+}
+
+function getSpawnForPlayerId(playerId) {
+  if (!playerId || !PLAYER_SPAWNS.length) return PLAYER_SPAWNS[0];
+  if (spawnSlotByPlayer.has(playerId)) {
+    return PLAYER_SPAWNS[spawnSlotByPlayer.get(playerId)] || PLAYER_SPAWNS[0];
+  }
+  let hash = 2166136261;
+  for (let i = 0; i < playerId.length; i += 1) {
+    hash ^= playerId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const start = Math.abs(hash >>> 0) % PLAYER_SPAWNS.length;
+  const occupied = new Set(Array.from(spawnSlotByPlayer.values()));
+  let picked = start;
+  for (let offset = 0; offset < PLAYER_SPAWNS.length; offset += 1) {
+    const candidate = (start + offset) % PLAYER_SPAWNS.length;
+    if (!occupied.has(candidate)) {
+      picked = candidate;
+      break;
+    }
+  }
+  spawnSlotByPlayer.set(playerId, picked);
+  return PLAYER_SPAWNS[picked] || PLAYER_SPAWNS[0];
+}
+
+function setPlayerEliminatedVisual(playerGroup, eliminated) {
+  if (!playerGroup) return;
+  playerGroup.visible = !eliminated;
+}
+
+function findSpectatorTarget() {
+  for (const [, rp] of remotePlayers) {
+    if (!rp || !rp.group || rp.defeated) continue;
+    return rp.group;
+  }
+  return null;
+}
+
+function updateSpectatorCamera() {
+  const target = findSpectatorTarget();
+  if (target) {
+    const desiredX = target.position.x - Math.sin(target.rotation.y) * 7.5;
+    const desiredY = target.position.y + 4.8;
+    const desiredZ = target.position.z - Math.cos(target.rotation.y) * 7.5;
+    camera.position.x += (desiredX - camera.position.x) * 0.08;
+    camera.position.y += (desiredY - camera.position.y) * 0.08;
+    camera.position.z += (desiredZ - camera.position.z) * 0.08;
+    camera.lookAt(target.position.x, target.position.y + 1.5, target.position.z);
+    return;
+  }
+  camera.position.x += (0 - camera.position.x) * 0.06;
+  camera.position.y += (24 - camera.position.y) * 0.06;
+  camera.position.z += (0 - camera.position.z) * 0.06;
+  camera.lookAt(0, 0, 0);
+}
+
+function enterSpectatorMode(message) {
+  if (spectatorMode) return;
+  spectatorMode = true;
+  setAimMode(false);
+  fireQueued = false;
+  keys.w = keys.a = keys.s = keys.d = false;
+  keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;
+  setPlayerEliminatedVisual(astroRoot, true);
+  setDefeatOverlayVisible(true, message || "Tu barra GameTag se llenó. Ahora estás en modo espectador.");
+  updateSpectatorIndicator();
+  persistLocalCombatState();
 }
 
 function createNameTagSprite(labelText, hitRatio = 0) {
@@ -365,6 +499,7 @@ function manejarRemoto(d) {
       }
     }
     updateNameTag(rp.group, rp.playerName || compactPlayerId(d.playerId), (rp.hits || 0) / MAX_HITS);
+      setPlayerEliminatedVisual(rp.group, !!rp.defeated);
     if (d.playerName && d.playerName !== rp.playerName) {
       rp.playerName = d.playerName;
       updateNameTag(rp.group, d.playerName, rp.hits / MAX_HITS);
@@ -417,6 +552,11 @@ function handleRemoteDamage(d) {
     if (typeof d.defeated === "boolean") localDefeated = d.defeated;
     if (typeof d.hitColorHex === "number" && astroRoot) addHitStain(astroRoot, d.hitColorHex);
     if (astroRoot) updateNameTag(astroRoot, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
+    persistLocalCombatState();
+    if (localDefeated) {
+      enterSpectatorMode("Perdiste la ronda. Estás en modo espectador.");
+      setStatus("Has perdido: modo espectador activo.", false);
+    }
     return;
   }
   const rp = remotePlayers.get(d.playerId);
@@ -428,6 +568,7 @@ function handleRemoteDamage(d) {
   if (typeof d.defeated === "boolean") rp.defeated = d.defeated;
   if (typeof d.hitColorHex === "number") addHitStain(rp.group, d.hitColorHex);
   updateNameTag(rp.group, rp.playerName || compactPlayerId(d.playerId), rp.hits / MAX_HITS);
+  setPlayerEliminatedVisual(rp.group, !!rp.defeated);
 }
 
 function handleRemoteHit(d) {
@@ -598,8 +739,10 @@ function applyHitToLocalPlayer(hitColorHex = 0xffffff) {
   localDamageSeq += 1;
   localLastHitColorHex = hitColorHex;
   updateNameTag(astroRoot, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
+  persistLocalCombatState();
   if (localHits >= MAX_HITS) {
     localDefeated = true;
+    enterSpectatorMode("Tu barra GameTag se llenó con 20 impactos. Ahora observas la partida.");
     setStatus("Has perdido: tu gametag se llenó de rojo (20 impactos).", false);
   }
 }
@@ -639,7 +782,7 @@ function processBulletHits() {
     const prevPos = bullet.userData?.prevPos || bullet.position;
     const currPos = bullet.position;
     let consumed = false;
-    if (astroRoot && ownerId !== LOCAL_PLAYER_ID) {
+    if (astroRoot && !localDefeated && ownerId !== LOCAL_PLAYER_ID) {
       if (bulletSegmentHitsAstronaut(prevPos, currPos, astroRoot)) {
         const hitColorHex = bullet.userData?.colorHex ?? 0xffffff;
         addHitStain(astroRoot, hitColorHex);
@@ -681,6 +824,9 @@ function processBulletHits() {
 
 function tickMovement(dt) {
   if (!astroRoot) return;
+  if (localDefeated) {
+    spectatorMode = true;
+  }
   let forward = 0;
   let strafe = 0;
   if (!localDefeated) {
@@ -693,42 +839,46 @@ function tickMovement(dt) {
   const yawStep = shortestAngleDelta(astroRoot.rotation.y, mouseLook.targetYaw);
   astroRoot.rotation.y += yawStep * 0.22;
   wander.lastRot = astroRoot.rotation.y;
-
-  let mx = Math.sin(astroRoot.rotation.y) * forward + -Math.cos(astroRoot.rotation.y) * strafe;
-  let mz = Math.cos(astroRoot.rotation.y) * forward + Math.sin(astroRoot.rotation.y) * strafe;
-  const l = Math.hypot(mx, mz) || 1;
-  mx /= l;
-  mz /= l;
-  const sp = 0.075;
-  if (mx || mz) {
-    wander.x = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.x + mx * sp));
-    wander.z = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.z + mz * sp));
-  }
-  astroRoot.position.x = wander.x;
-  astroRoot.position.z = wander.z;
   const t = performance.now() * 0.001;
-  astroRoot.position.y = 0.02 * Math.sin(t * 1.12);
 
-  const p = astroRoot.position;
-  const r = astroRoot.rotation.y;
-  const desiredDist = isAiming ? aimCamera.dist : camZoom.targetDist;
-  camSegui.dist += (desiredDist - camSegui.dist) * 0.18;
-  const cameraHeight = isAiming ? aimCamera.alto : camSegui.alto;
-  const distPlano = camSegui.dist * Math.cos(mouseLook.pitch);
-  const tx = p.x - Math.sin(r) * distPlano;
-  const ty = p.y + cameraHeight + camSegui.dist * Math.sin(mouseLook.pitch);
-  const tz = p.z - Math.cos(r) * distPlano;
-  const s = isAiming ? aimCamera.smooth : camSegui.suav;
-  camera.position.x += (tx - camera.position.x) * s;
-  camera.position.y += (ty - camera.position.y) * s;
-  camera.position.z += (tz - camera.position.z) * s;
-  if (isAiming) {
-    const lookX = p.x + Math.sin(r) * aimCamera.lookAhead;
-    const lookY = p.y + 1.72;
-    const lookZ = p.z + Math.cos(r) * aimCamera.lookAhead;
-    camera.lookAt(lookX, lookY, lookZ);
+  if (!spectatorMode) {
+    let mx = Math.sin(astroRoot.rotation.y) * forward + -Math.cos(astroRoot.rotation.y) * strafe;
+    let mz = Math.cos(astroRoot.rotation.y) * forward + Math.sin(astroRoot.rotation.y) * strafe;
+    const l = Math.hypot(mx, mz) || 1;
+    mx /= l;
+    mz /= l;
+    const sp = 0.075;
+    if (mx || mz) {
+      wander.x = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.x + mx * sp));
+      wander.z = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.z + mz * sp));
+    }
+    astroRoot.position.x = wander.x;
+    astroRoot.position.z = wander.z;
+    astroRoot.position.y = 0.02 * Math.sin(t * 1.12);
+
+    const p = astroRoot.position;
+    const r = astroRoot.rotation.y;
+    const desiredDist = isAiming ? aimCamera.dist : camZoom.targetDist;
+    camSegui.dist += (desiredDist - camSegui.dist) * 0.18;
+    const cameraHeight = isAiming ? aimCamera.alto : camSegui.alto;
+    const distPlano = camSegui.dist * Math.cos(mouseLook.pitch);
+    const tx = p.x - Math.sin(r) * distPlano;
+    const ty = p.y + cameraHeight + camSegui.dist * Math.sin(mouseLook.pitch);
+    const tz = p.z - Math.cos(r) * distPlano;
+    const s = isAiming ? aimCamera.smooth : camSegui.suav;
+    camera.position.x += (tx - camera.position.x) * s;
+    camera.position.y += (ty - camera.position.y) * s;
+    camera.position.z += (tz - camera.position.z) * s;
+    if (isAiming) {
+      const lookX = p.x + Math.sin(r) * aimCamera.lookAhead;
+      const lookY = p.y + 1.72;
+      const lookZ = p.z + Math.cos(r) * aimCamera.lookAhead;
+      camera.lookAt(lookX, lookY, lookZ);
+    } else {
+      camera.lookAt(p.x, p.y + 1.15, p.z);
+    }
   } else {
-    camera.lookAt(p.x, p.y + 1.15, p.z);
+    updateSpectatorCamera();
   }
 
   if (gun2Root) {
@@ -751,6 +901,7 @@ function tickMovement(dt) {
 
   remotePlayers.forEach((rp) => {
     if (!rp.group) return;
+    setPlayerEliminatedVisual(rp.group, !!rp.defeated);
     rp.group.position.lerp(rp.targetPos, 0.2);
     const dYaw = shortestAngleDelta(rp.group.rotation.y, rp.targetRotY);
     rp.group.rotation.y += dYaw * 0.2;
@@ -916,7 +1067,7 @@ function spawnRemotePlayer(
       obj.name = "astro-mesh-remote";
       group.add(obj);
       tryRemoteAstroPng(0, obj, () => {
-        const fixedSpawn = spawnForPlayer(playerId, PLAYER_SPAWNS);
+        const fixedSpawn = getSpawnForPlayerId(playerId);
         const playerColor = PLAYER_COLORS[0];
         group.scale.setScalar(WORLD_GROUP_SCALE);
         group.position.set(fixedSpawn.x, 0, fixedSpawn.z);
@@ -937,6 +1088,7 @@ function spawnRemotePlayer(
           targetPos: new THREE.Vector3(fixedSpawn.x, 0, fixedSpawn.z),
           targetRotY: fixedSpawn.yaw
         });
+        setPlayerEliminatedVisual(group, !!remoteDefeated);
         recomputePlayerColors();
         loadRemoteGun2(playerId, remoteGun2);
         remotePlayersLoading.delete(playerId);
@@ -974,7 +1126,7 @@ function placeInScene(astroGroup, gun2) {
   astroGroup.scale.setScalar(WORLD_GROUP_SCALE);
   scene.add(astroGroup);
   astroRoot = astroGroup;
-  const mySpawn = spawnForPlayer(LOCAL_PLAYER_ID, PLAYER_SPAWNS);
+  const mySpawn = getSpawnForPlayerId(LOCAL_PLAYER_ID);
   wander.x = mySpawn.x;
   wander.z = mySpawn.z;
   wander.lastRot = mySpawn.yaw;
@@ -985,10 +1137,27 @@ function placeInScene(astroGroup, gun2) {
   tintAstroWithPlayerColor(astroGroup, localPlayerColor);
   localHits = 0;
   localDefeated = false;
+  spectatorMode = false;
   localDamageSeq = 0;
   localShotSeq = 0;
   localLastHitColorHex = 0xffffff;
-  updateNameTag(astroGroup, LOCAL_PLAYER_LABEL, 0);
+  const persistedState = loadPersistedLocalCombatState();
+  if (persistedState) {
+    localHits = persistedState.hits;
+    localDefeated = persistedState.defeated;
+    localDamageSeq = Math.max(localDamageSeq, persistedState.damageSeq);
+    localLastHitColorHex = persistedState.lastHitColorHex;
+  }
+  setPlayerEliminatedVisual(astroRoot, false);
+  setDefeatOverlayVisible(false);
+  updateNameTag(astroGroup, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
+  if (localDefeated) {
+    enterSpectatorMode("Ya estabas eliminado. Sigues en modo espectador.");
+    setStatus("Modo espectador restaurado tras recarga.", false);
+  } else {
+    persistLocalCombatState();
+    updateSpectatorIndicator();
+  }
   recomputePlayerColors();
   if (gun2) {
     gun2Root = gun2;
@@ -1006,6 +1175,7 @@ function placeInScene(astroGroup, gun2) {
 
 bindKeys();
 bindMouseLook();
+bindDefeatActions();
 if (canvas) {
   canvas.addEventListener("click", () => canvas.focus({ preventScroll: true }));
 }

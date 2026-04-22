@@ -19,8 +19,15 @@ export function resolveLocalPlayerName() {
 }
 
 export function resolveLocalPlayerId(playerName = "") {
+  const q = new URLSearchParams(window.location.search);
+  const fromQuery = q.get("playerId");
+  if (fromQuery && fromQuery.trim()) {
+    return fromQuery.trim();
+  }
+  const ventanaId = q.get("ventana") || "1";
+  const storageKey = `${LOCAL_PLAYER_ID_KEY}_${ventanaId}`;
   try {
-    const saved = window.sessionStorage.getItem(LOCAL_PLAYER_ID_KEY);
+    const saved = window.sessionStorage.getItem(storageKey);
     if (saved && saved.trim()) return saved.trim();
   } catch (_) {
     /* ignorar */
@@ -28,7 +35,7 @@ export function resolveLocalPlayerId(playerName = "") {
   const base = playerName ? playerName.replace(/\s+/g, "_") : "jugador";
   const generated = `${base}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   try {
-    window.sessionStorage.setItem(LOCAL_PLAYER_ID_KEY, generated);
+    window.sessionStorage.setItem(storageKey, generated);
   } catch (_) {
     /* ignorar */
   }
