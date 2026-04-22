@@ -71,9 +71,29 @@ const gun2World = { x: -0.55, y: 2.99, z: 1.8 };
 const GUN_NUDGE = 0.028;
 const GUN2_SCALE = 0.008;
 const GUN2_ROTATION = { rotationX: Math.PI / 4.5, rotationY: -1.8, rotationZ: 0 };
+const GUN3_SCALE = 0.014;
+const GUN3_PICKUP_SCALE = 0.11;
+const GUN3_ROTATION = { rotationX: Math.PI / 6, rotationY: -1.6, rotationZ: 0 };
+const GUN3_PICKUP_BASE_Y = 1.45;
+const GUN3_PICKUP_RADIUS = 2.1;
+const GUN3_PICKUP_CENTER = new THREE.Vector3(0, GUN3_PICKUP_BASE_Y, 0);
+const SHOTGUN_SCALE = 0.11;
+const SHOTGUN_ROTATION = { rotationX: Math.PI / 7, rotationY: -1.55, rotationZ: 0.02 };
+const SHOTGUN_PICKUP_BASE_Y = 1.35;
+const SHOTGUN_PICKUP_RADIUS = 2.1;
+const SHOTGUN_PICKUP_CENTER = new THREE.Vector3(6.2, SHOTGUN_PICKUP_BASE_Y, 0);
 const BULLET_SCALE = 0.019;
 const BULLET_SPEED = 28;
-const BULLET_COOLDOWN_MS = 190;
+const BULLET_COOLDOWN_SUB_MS = 190;
+const BULLET_COOLDOWN_PISTOL_MS = 340;
+const BULLET_COOLDOWN_SHOTGUN_MS = 560;
+const SUBFUSIL_BASE_DAMAGE = 1;
+const PISTOL_DAMAGE_MULTIPLIER = 2;
+const SHOTGUN_DAMAGE_MULTIPLIER = 4;
+const GUN1_SHOT_SFX_URL = "assets/sfx/items/sub.mp3";
+const GUN3_SHOT_SFX_URL = "assets/sfx/items/pistol.mp3";
+const SHOTGUN_SHOT_SFX_URL = "assets/sfx/items/shotgun.mp3";
+const GUN1_SHOT_POOL_SIZE = 4;
 const PLAYER_COLORS = [0x3b82f6, 0xffffff, 0x22c55e, 0xeab308];
 const MAX_HITS = 20;
 const STAIN_DURATION_MS = 5000;
@@ -145,6 +165,17 @@ let astroRoot = null;
 let gun2Root = null;
 /** Plantilla del modelo de bala cargado desde assets/models/bullet. */
 let bulletTemplate = null;
+let gun3Template = null;
+let gun3Pickup = null;
+let shotgunTemplate = null;
+let shotgunPickup = null;
+let localWeaponType = "gun2";
+let hasPickedGun3 = false;
+let gun3PickupAvailable = true;
+let gun3OwnerPlayerId = "";
+let hasPickedShotgun = false;
+let shotgunPickupAvailable = true;
+let shotgunOwnerPlayerId = "";
 const activeBullets = [];
 let lastShotAt = 0;
 let localHits = 0;
@@ -158,12 +189,356 @@ const remotePlayersLoading = new Set();
 const seenRemoteShotIds = new Set();
 const spawnSlotByPlayer = new Map();
 const clock = new THREE.Clock();
+const gun1ShotSfxPool = [];
+const gun3ShotSfxPool = [];
+const shotgunShotSfxPool = [];
+let gun1ShotSfxIndex = 0;
+let gun3ShotSfxIndex = 0;
+let shotgunShotSfxIndex = 0;
 
 function shortestAngleDelta(from, to) {
   const TAU = Math.PI * 2;
   let d = (to - from + Math.PI) % TAU;
   if (d < 0) d += TAU;
   return d - Math.PI;
+}
+
+function initGun1ShotSfx() {
+  if (gun1ShotSfxPool.length) return;
+  for (let i = 0; i < GUN1_SHOT_POOL_SIZE; i += 1) {
+    const a = new Audio(GUN1_SHOT_SFX_URL);
+    a.preload = "auto";
+    a.volume = 0.42;
+    gun1ShotSfxPool.push(a);
+  }
+}
+
+function initGun3ShotSfx() {
+  if (gun3ShotSfxPool.length) return;
+  for (let i = 0; i < GUN1_SHOT_POOL_SIZE; i += 1) {
+    const a = new Audio(GUN3_SHOT_SFX_URL);
+    a.preload = "auto";
+    a.volume = 0.44;
+    gun3ShotSfxPool.push(a);
+  }
+}
+
+function initShotgunShotSfx() {
+  if (shotgunShotSfxPool.length) return;
+  for (let i = 0; i < GUN1_SHOT_POOL_SIZE; i += 1) {
+    const a = new Audio(SHOTGUN_SHOT_SFX_URL);
+    a.preload = "auto";
+    a.volume = 0.46;
+    shotgunShotSfxPool.push(a);
+  }
+}
+
+function playGun1ShotSfx() {
+  if (!gun1ShotSfxPool.length) return;
+  const a = gun1ShotSfxPool[gun1ShotSfxIndex];
+  gun1ShotSfxIndex = (gun1ShotSfxIndex + 1) % gun1ShotSfxPool.length;
+  if (!a) return;
+  try {
+    a.currentTime = 0;
+    const playPromise = a.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        /* ignore autoplay/transient audio errors */
+      });
+    }
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function playGun3ShotSfx() {
+  if (!gun3ShotSfxPool.length) return;
+  const a = gun3ShotSfxPool[gun3ShotSfxIndex];
+  gun3ShotSfxIndex = (gun3ShotSfxIndex + 1) % gun3ShotSfxPool.length;
+  if (!a) return;
+  try {
+    a.currentTime = 0;
+    const playPromise = a.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        /* ignore autoplay/transient audio errors */
+      });
+    }
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function playShotgunShotSfx() {
+  if (!shotgunShotSfxPool.length) return;
+  const a = shotgunShotSfxPool[shotgunShotSfxIndex];
+  shotgunShotSfxIndex = (shotgunShotSfxIndex + 1) % shotgunShotSfxPool.length;
+  if (!a) return;
+  try {
+    a.currentTime = 0;
+    const playPromise = a.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        /* ignore autoplay/transient audio errors */
+      });
+    }
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function setWeaponType(nextWeaponType) {
+  localWeaponType = normalizedWeaponType(nextWeaponType);
+}
+
+function normalizedWeaponType(raw) {
+  if (raw === "gun3" || raw === "shotgun") return raw;
+  return "gun2";
+}
+
+function weaponRotationForType(weaponType) {
+  const wt = normalizedWeaponType(weaponType);
+  if (wt === "gun3") return GUN3_ROTATION;
+  if (wt === "shotgun") return SHOTGUN_ROTATION;
+  return GUN2_ROTATION;
+}
+
+function weaponDamageForType(weaponType) {
+  const wt = normalizedWeaponType(weaponType);
+  if (wt === "gun3") return SUBFUSIL_BASE_DAMAGE * PISTOL_DAMAGE_MULTIPLIER;
+  if (wt === "shotgun") return SUBFUSIL_BASE_DAMAGE * SHOTGUN_DAMAGE_MULTIPLIER;
+  return SUBFUSIL_BASE_DAMAGE;
+}
+
+function weaponCooldownForType(weaponType) {
+  const wt = normalizedWeaponType(weaponType);
+  if (wt === "gun3") return BULLET_COOLDOWN_PISTOL_MS;
+  if (wt === "shotgun") return BULLET_COOLDOWN_SHOTGUN_MS;
+  return BULLET_COOLDOWN_SUB_MS;
+}
+
+function removeGun3Pickup() {
+  if (!gun3Pickup) return;
+  scene.remove(gun3Pickup);
+  gun3Pickup = null;
+}
+
+function spawnGun3Pickup() {
+  if (!gun3PickupAvailable || !gun3Template || gun3Pickup || hasPickedGun3) return;
+  gun3Pickup = gun3Template.clone(true);
+  gun3Pickup.name = "weapon-gun3-pickup";
+  gun3Pickup.position.copy(GUN3_PICKUP_CENTER);
+  gun3Pickup.rotation.set(0.22, 0, -0.12);
+  scene.add(gun3Pickup);
+}
+
+function applyGun3PickupState(available, ownerId = "") {
+  gun3PickupAvailable = !!available;
+  gun3OwnerPlayerId = ownerId || "";
+  if (gun3PickupAvailable) {
+    spawnGun3Pickup();
+  } else {
+    removeGun3Pickup();
+  }
+}
+
+function removeShotgunPickup() {
+  if (!shotgunPickup) return;
+  scene.remove(shotgunPickup);
+  shotgunPickup = null;
+}
+
+function spawnShotgunPickup() {
+  if (!shotgunPickupAvailable || !shotgunTemplate || shotgunPickup || hasPickedShotgun) return;
+  shotgunPickup = shotgunTemplate.clone(true);
+  shotgunPickup.name = "weapon-shotgun-pickup";
+  shotgunPickup.position.copy(SHOTGUN_PICKUP_CENTER);
+  shotgunPickup.rotation.set(0.22, 0, -0.08);
+  scene.add(shotgunPickup);
+}
+
+function applyShotgunPickupState(available, ownerId = "") {
+  shotgunPickupAvailable = !!available;
+  shotgunOwnerPlayerId = ownerId || "";
+  if (shotgunPickupAvailable) spawnShotgunPickup();
+  else removeShotgunPickup();
+}
+
+function equipGun3Local() {
+  if (hasPickedGun3 || !gun3PickupAvailable || !gun3Template || !astroRoot) return;
+  hasPickedGun3 = true;
+  hasPickedShotgun = false;
+  applyGun3PickupState(false, LOCAL_PLAYER_ID);
+  if (gun2Root && gun2Root.parent) {
+    gun2Root.parent.remove(gun2Root);
+    gun2Root = null;
+  }
+  const gun3 = gun3Template.clone(true);
+  setupGunMesh(gun3, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION));
+  gun3.name = "weapon-gun3";
+  gun2Root = gun3;
+  astroRoot.add(gun3);
+  setWeaponType("gun3");
+  enviarVista({
+    tipo: "gun3State",
+    available: false,
+    ownerPlayerId: LOCAL_PLAYER_ID
+  });
+  setStatus("Recogiste gun3: equipada.", true);
+}
+
+function equipShotgunLocal() {
+  if (hasPickedShotgun || !shotgunPickupAvailable || !shotgunTemplate || !astroRoot) return;
+  hasPickedShotgun = true;
+  hasPickedGun3 = false;
+  applyShotgunPickupState(false, LOCAL_PLAYER_ID);
+  if (gun2Root && gun2Root.parent) {
+    gun2Root.parent.remove(gun2Root);
+    gun2Root = null;
+  }
+  const shotgun = shotgunTemplate.clone(true);
+  setupGunMesh(shotgun, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION));
+  shotgun.name = "weapon-shotgun";
+  gun2Root = shotgun;
+  astroRoot.add(shotgun);
+  setWeaponType("shotgun");
+  enviarVista({
+    tipo: "shotgunState",
+    available: false,
+    ownerPlayerId: LOCAL_PLAYER_ID
+  });
+  setStatus("Recogiste shotgun: equipada.", true);
+}
+
+function updateGun3Pickup(nowMs) {
+  if (!gun3Pickup) return;
+  const t = nowMs * 0.001;
+  gun3Pickup.rotation.y = t * 1.9;
+  gun3Pickup.position.y = GUN3_PICKUP_BASE_Y + Math.sin(t * 2.7) * 0.35;
+  if (!astroRoot || localDefeated || hasPickedGun3 || !gun3PickupAvailable) return;
+  const dx = astroRoot.position.x - gun3Pickup.position.x;
+  const dz = astroRoot.position.z - gun3Pickup.position.z;
+  if (dx * dx + dz * dz <= GUN3_PICKUP_RADIUS * GUN3_PICKUP_RADIUS) {
+    equipGun3Local();
+  }
+}
+
+function updateShotgunPickup(nowMs) {
+  if (!shotgunPickup) return;
+  const t = nowMs * 0.001;
+  shotgunPickup.rotation.y = -t * 1.75;
+  shotgunPickup.position.y = SHOTGUN_PICKUP_BASE_Y + Math.sin(t * 2.25) * 0.3;
+  if (!astroRoot || localDefeated || hasPickedShotgun || !shotgunPickupAvailable) return;
+  const dx = astroRoot.position.x - shotgunPickup.position.x;
+  const dz = astroRoot.position.z - shotgunPickup.position.z;
+  if (dx * dx + dz * dz <= SHOTGUN_PICKUP_RADIUS * SHOTGUN_PICKUP_RADIUS) {
+    equipShotgunLocal();
+  }
+}
+
+function clearRemoteWeapon(rp) {
+  if (!rp || !rp.weaponRoot) return;
+  if (rp.weaponRoot.parent) rp.weaponRoot.parent.remove(rp.weaponRoot);
+  rp.weaponRoot = null;
+  rp.gun2Root = null;
+}
+
+function attachRemoteWeapon(playerId, weaponModel, weaponType) {
+  const rp = remotePlayers.get(playerId);
+  if (!rp || !rp.group || !weaponModel) return;
+  clearRemoteWeapon(rp);
+  rp.group.add(weaponModel);
+  rp.weaponRoot = weaponModel;
+  rp.gun2Root = weaponModel;
+  rp.weaponType = normalizedWeaponType(weaponType);
+}
+
+function loadRemoteGun3(playerId, gunStart) {
+  const rp = remotePlayers.get(playerId);
+  if (!rp || !rp.group) return;
+  loadTextureFirst(
+    pathsFor("gun3/gun3.png"),
+    (gunTex) => {
+      prepTex(gunTex, aniso);
+      loadObjFirst(
+        pathsFor("gun3/gun3.obj"),
+        (gun3) => {
+          const start = gunStart || rp.gun2World;
+          setupGunMesh(gun3, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION));
+          gun3.name = `weapon-gun3-${playerId}`;
+          attachRemoteWeapon(playerId, gun3, "gun3");
+        },
+        () => {
+          /* no-op */
+        }
+      );
+    },
+    () => {
+      loadObjFirst(
+        pathsFor("gun3/gun3.obj"),
+        (gun3) => {
+          const start = gunStart || rp.gun2World;
+          setupGunMesh(gun3, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION));
+          gun3.name = `weapon-gun3-${playerId}`;
+          attachRemoteWeapon(playerId, gun3, "gun3");
+        },
+        () => {
+          /* no-op */
+        }
+      );
+    }
+  );
+}
+
+function loadRemoteShotgun(playerId, gunStart) {
+  const rp = remotePlayers.get(playerId);
+  if (!rp || !rp.group) return;
+  loadTextureFirst(
+    pathsFor("gun4/shotgun.png"),
+    (gunTex) => {
+      prepTex(gunTex, aniso);
+      loadObjFirst(
+        pathsFor("gun4/shotgun.obj"),
+        (shotgunObj) => {
+          const start = gunStart || rp.gun2World;
+          setupGunMesh(shotgunObj, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION));
+          shotgunObj.name = `weapon-shotgun-${playerId}`;
+          attachRemoteWeapon(playerId, shotgunObj, "shotgun");
+        },
+        () => {
+          /* no-op */
+        }
+      );
+    },
+    () => {
+      loadObjFirst(
+        pathsFor("gun4/shotgun.obj"),
+        (shotgunObj) => {
+          const start = gunStart || rp.gun2World;
+          setupGunMesh(shotgunObj, null, WORLD_GROUP_SCALE, start, gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION));
+          shotgunObj.name = `weapon-shotgun-${playerId}`;
+          attachRemoteWeapon(playerId, shotgunObj, "shotgun");
+        },
+        () => {
+          /* no-op */
+        }
+      );
+    }
+  );
+}
+
+function syncRemoteWeaponByType(playerId, weaponType) {
+  const rp = remotePlayers.get(playerId);
+  if (!rp) return;
+  const nextType = normalizedWeaponType(weaponType);
+  if (rp.weaponType === nextType && rp.weaponRoot) return;
+  if (nextType === "gun3") {
+    loadRemoteGun3(playerId, rp.gun2World);
+  } else if (nextType === "shotgun") {
+    loadRemoteShotgun(playerId, rp.gun2World);
+  } else {
+    loadRemoteGun2(playerId, rp.gun2World);
+  }
 }
 
 function recomputePlayerColors() {
@@ -326,6 +701,11 @@ function setPlayerEliminatedVisual(playerGroup, eliminated) {
   playerGroup.visible = !eliminated;
 }
 
+function syncRemoteDefeatVisual(remotePlayerState) {
+  if (!remotePlayerState || !remotePlayerState.group) return;
+  setPlayerEliminatedVisual(remotePlayerState.group, !!remotePlayerState.defeated);
+}
+
 function findSpectatorTarget() {
   for (const [, rp] of remotePlayers) {
     if (!rp || !rp.group || rp.defeated) continue;
@@ -439,6 +819,11 @@ function sendPose() {
   if (gun2Root) {
     msg.gun2World = { x: gun2World.x, y: gun2World.y, z: gun2World.z };
   }
+  msg.weaponType = localWeaponType;
+  msg.gun3PickupAvailable = gun3PickupAvailable;
+  msg.gun3OwnerPlayerId = gun3OwnerPlayerId;
+  msg.shotgunPickupAvailable = shotgunPickupAvailable;
+  msg.shotgunOwnerPlayerId = shotgunOwnerPlayerId;
   enviarVista(msg);
 }
 
@@ -460,12 +845,26 @@ function manejarRemoto(d) {
     handleRemoteDamage(d);
     return;
   }
+  if (d.tipo === "gun3State") {
+    applyGun3PickupState(d.available !== false, d.ownerPlayerId || "");
+    return;
+  }
+  if (d.tipo === "shotgunState") {
+    applyShotgunPickupState(d.available !== false, d.ownerPlayerId || "");
+    return;
+  }
   if (d.tipo !== "modelo" || !d.playerId || typeof d.playerId !== "string") return;
   if (d.playerId === LOCAL_PLAYER_ID) return;
   const pos = d.pos;
   const rotY = d.rotY;
   if (!Array.isArray(pos) || pos.length < 3 || typeof rotY !== "number" || !isFinite(rotY)) {
     return;
+  }
+  if (typeof d.gun3PickupAvailable === "boolean") {
+    applyGun3PickupState(d.gun3PickupAvailable, d.gun3OwnerPlayerId || "");
+  }
+  if (typeof d.shotgunPickupAvailable === "boolean") {
+    applyShotgunPickupState(d.shotgunPickupAvailable, d.shotgunOwnerPlayerId || "");
   }
   const rp = remotePlayers.get(d.playerId);
   if (rp) {
@@ -476,6 +875,9 @@ function manejarRemoto(d) {
       if (typeof g2.x === "number" && isFinite(g2.x)) rp.gun2World.x = g2.x;
       if (typeof g2.y === "number" && isFinite(g2.y)) rp.gun2World.y = g2.y;
       if (typeof g2.z === "number" && isFinite(g2.z)) rp.gun2World.z = g2.z;
+    }
+    if (typeof d.weaponType === "string") {
+      syncRemoteWeaponByType(d.playerId, d.weaponType);
     }
     const incomingSeq = typeof d.damageSeq === "number" && isFinite(d.damageSeq) ? Math.floor(d.damageSeq) : null;
     const prevSeq = rp.damageSeq || 0;
@@ -499,7 +901,7 @@ function manejarRemoto(d) {
       }
     }
     updateNameTag(rp.group, rp.playerName || compactPlayerId(d.playerId), (rp.hits || 0) / MAX_HITS);
-      setPlayerEliminatedVisual(rp.group, !!rp.defeated);
+    syncRemoteDefeatVisual(rp);
     if (d.playerName && d.playerName !== rp.playerName) {
       rp.playerName = d.playerName;
       updateNameTag(rp.group, d.playerName, rp.hits / MAX_HITS);
@@ -509,7 +911,7 @@ function manejarRemoto(d) {
   }
   if (remotePlayersLoading.has(d.playerId)) return;
   remotePlayersLoading.add(d.playerId);
-  spawnRemotePlayer(d.playerId, d.playerName, d.gun2World, d.hits, d.defeated, d.damageSeq);
+  spawnRemotePlayer(d.playerId, d.playerName, d.gun2World, d.hits, d.defeated, d.damageSeq, d.weaponType);
 }
 
 function handleRemoteShot(d) {
@@ -536,6 +938,7 @@ function handleRemoteShot(d) {
   });
   if (!bullet) return;
   bullet.userData.ownerId = d.playerId;
+  bullet.userData.damage = Math.max(1, Math.floor(Number(d.damage) || 1));
   scene.add(bullet);
   activeBullets.push(bullet);
 }
@@ -568,7 +971,7 @@ function handleRemoteDamage(d) {
   if (typeof d.defeated === "boolean") rp.defeated = d.defeated;
   if (typeof d.hitColorHex === "number") addHitStain(rp.group, d.hitColorHex);
   updateNameTag(rp.group, rp.playerName || compactPlayerId(d.playerId), rp.hits / MAX_HITS);
-  setPlayerEliminatedVisual(rp.group, !!rp.defeated);
+  syncRemoteDefeatVisual(rp);
 }
 
 function handleRemoteHit(d) {
@@ -576,8 +979,9 @@ function handleRemoteHit(d) {
   if (d.targetPlayerId !== LOCAL_PLAYER_ID) return;
   if (localDefeated) return;
   const hitColorHex = typeof d.hitColorHex === "number" ? d.hitColorHex : 0xffffff;
+  const hitDamage = Math.max(1, Math.floor(Number(d.damage) || 1));
   addHitStain(astroRoot, hitColorHex);
-  applyHitToLocalPlayer(hitColorHex);
+  applyHitToLocalPlayer(hitColorHex, hitDamage);
   sendPose();
   enviarVista({
     tipo: "damage",
@@ -701,7 +1105,9 @@ function bindMouseLook() {
 
 function shootIfReady(nowMs) {
   if (!fireQueued || !astroRoot || !bulletTemplate || localDefeated) return;
-  if (nowMs - lastShotAt < BULLET_COOLDOWN_MS) return;
+  const shotCooldownMs = weaponCooldownForType(localWeaponType);
+  if (nowMs - lastShotAt < shotCooldownMs) return;
+  const shotDamage = weaponDamageForType(localWeaponType);
   const source = gun2Root || astroRoot;
   const forward = new THREE.Vector3();
   camera.getWorldDirection(forward);
@@ -717,8 +1123,12 @@ function shootIfReady(nowMs) {
   });
   if (!bullet) return;
   bullet.userData.ownerId = LOCAL_PLAYER_ID;
+  bullet.userData.damage = shotDamage;
   scene.add(bullet);
   activeBullets.push(bullet);
+  if (localWeaponType === "gun3") playGun3ShotSfx();
+  else if (localWeaponType === "shotgun") playShotgunShotSfx();
+  else playGun1ShotSfx();
   localShotSeq += 1;
   const shotId = `${LOCAL_PLAYER_ID}:${localShotSeq}`;
   enviarVista({
@@ -727,15 +1137,17 @@ function shootIfReady(nowMs) {
     shotId,
     pos: bullet.position.toArray(),
     dir: forward.toArray(),
-    colorHex: localPlayerColor
+    colorHex: localPlayerColor,
+    damage: shotDamage
   });
   lastShotAt = nowMs;
   fireQueued = false;
 }
 
-function applyHitToLocalPlayer(hitColorHex = 0xffffff) {
+function applyHitToLocalPlayer(hitColorHex = 0xffffff, damage = 1) {
   if (localDefeated || !astroRoot) return;
-  localHits = Math.min(MAX_HITS, localHits + 1);
+  const delta = Math.max(1, Math.floor(Number(damage) || 1));
+  localHits = Math.min(MAX_HITS, localHits + delta);
   localDamageSeq += 1;
   localLastHitColorHex = hitColorHex;
   updateNameTag(astroRoot, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
@@ -785,8 +1197,9 @@ function processBulletHits() {
     if (astroRoot && !localDefeated && ownerId !== LOCAL_PLAYER_ID) {
       if (bulletSegmentHitsAstronaut(prevPos, currPos, astroRoot)) {
         const hitColorHex = bullet.userData?.colorHex ?? 0xffffff;
+        const hitDamage = Math.max(1, Math.floor(Number(bullet.userData?.damage) || 1));
         addHitStain(astroRoot, hitColorHex);
-        applyHitToLocalPlayer(hitColorHex);
+        applyHitToLocalPlayer(hitColorHex, hitDamage);
         sendPose();
         enviarVista({
           tipo: "damage",
@@ -804,11 +1217,13 @@ function processBulletHits() {
         if (!rp || !rp.group || rp.defeated) continue;
         if (bulletSegmentHitsAstronaut(prevPos, currPos, rp.group)) {
           const hitColorHex = bullet.userData?.colorHex ?? localPlayerColor;
+          const hitDamage = Math.max(1, Math.floor(Number(bullet.userData?.damage) || 1));
           enviarVista({
             tipo: "hit",
             playerId: LOCAL_PLAYER_ID,
             targetPlayerId,
-            hitColorHex
+            hitColorHex,
+            damage: hitDamage
           });
           consumed = true;
           break;
@@ -886,7 +1301,7 @@ function tickMovement(dt) {
       applyGun2Input(gun2World, keysGun2, GUN_NUDGE);
     }
     clampGun2LocalOffset(gun2World);
-    applyGun2LocalTransform(gun2Root, gun2World, t, GUN2_ROTATION);
+    applyGun2LocalTransform(gun2Root, gun2World, t, weaponRotationForType(localWeaponType));
   }
 
   if (!aplicandoRemoto) {
@@ -894,6 +1309,8 @@ function tickMovement(dt) {
   }
 
   shootIfReady(performance.now());
+  updateGun3Pickup(performance.now());
+  updateShotgunPickup(performance.now());
   updateBullets(scene, activeBullets, dt);
   processBulletHits();
   const nowMs = performance.now();
@@ -901,11 +1318,10 @@ function tickMovement(dt) {
 
   remotePlayers.forEach((rp) => {
     if (!rp.group) return;
-    setPlayerEliminatedVisual(rp.group, !!rp.defeated);
     rp.group.position.lerp(rp.targetPos, 0.2);
     const dYaw = shortestAngleDelta(rp.group.rotation.y, rp.targetRotY);
     rp.group.rotation.y += dYaw * 0.2;
-    applyGun2RemoteTransform(rp.gun2Root, rp.gun2World, t, GUN2_ROTATION);
+    applyGun2RemoteTransform(rp.gun2Root, rp.gun2World, t, weaponRotationForType(rp.weaponType));
     refreshAstronautStain(rp.group, nowMs);
   });
 }
@@ -969,6 +1385,8 @@ function loadGun2AndPlace(astroGroup) {
 
 function loadLocalModelsAndFinish(astroGroup) {
   loadBulletTemplate();
+  loadGun3Template();
+  loadShotgunTemplate();
   loadGun2AndPlace(astroGroup);
 }
 
@@ -983,6 +1401,96 @@ function loadBulletTemplate() {
     },
     () => {
       bulletTemplate = null;
+    }
+  );
+}
+
+function loadGun3Template() {
+  loadTextureFirst(
+    pathsFor("gun3/gun3.png"),
+    (gunTex) => {
+      prepTex(gunTex, aniso);
+      loadObjFirst(
+        pathsFor("gun3/gun3.obj"),
+        (gun3) => {
+          setupGunMesh(
+            gun3,
+            gunTex,
+            WORLD_GROUP_SCALE,
+            { x: 0, y: GUN3_PICKUP_BASE_Y, z: 0 },
+            gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION)
+          );
+          gun3Template = gun3;
+          spawnGun3Pickup();
+        },
+        () => {
+          gun3Template = null;
+        }
+      );
+    },
+    () => {
+      loadObjFirst(
+        pathsFor("gun3/gun3.obj"),
+        (gun3) => {
+          setupGunMesh(
+            gun3,
+            null,
+            WORLD_GROUP_SCALE,
+            { x: 0, y: GUN3_PICKUP_BASE_Y, z: 0 },
+            gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION)
+          );
+          gun3Template = gun3;
+          spawnGun3Pickup();
+        },
+        () => {
+          gun3Template = null;
+        }
+      );
+    }
+  );
+}
+
+function loadShotgunTemplate() {
+  loadTextureFirst(
+    pathsFor("gun4/shotgun.png"),
+    (gunTex) => {
+      prepTex(gunTex, aniso);
+      loadObjFirst(
+        pathsFor("gun4/shotgun.obj"),
+        (shotgunObj) => {
+          setupGunMesh(
+            shotgunObj,
+            gunTex,
+            WORLD_GROUP_SCALE,
+            { x: SHOTGUN_PICKUP_CENTER.x, y: SHOTGUN_PICKUP_BASE_Y, z: SHOTGUN_PICKUP_CENTER.z },
+            gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION)
+          );
+          shotgunTemplate = shotgunObj;
+          spawnShotgunPickup();
+        },
+        () => {
+          shotgunTemplate = null;
+        }
+      );
+    },
+    () => {
+      loadObjFirst(
+        pathsFor("gun4/shotgun.obj"),
+        (shotgunObj) => {
+          setupGunMesh(
+            shotgunObj,
+            null,
+            WORLD_GROUP_SCALE,
+            { x: SHOTGUN_PICKUP_CENTER.x, y: SHOTGUN_PICKUP_BASE_Y, z: SHOTGUN_PICKUP_CENTER.z },
+            gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION)
+          );
+          shotgunTemplate = shotgunObj;
+          spawnShotgunPickup();
+        },
+        () => {
+          shotgunTemplate = null;
+        }
+      );
     }
   );
 }
@@ -1020,8 +1528,7 @@ function loadRemoteGun2(playerId, gun2Start) {
           const start = gun2Start || rp.gun2World;
           setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
           gun2.name = `weapon-gun2-${playerId}`;
-          rp.group.add(gun2);
-          rp.gun2Root = gun2;
+          attachRemoteWeapon(playerId, gun2, "gun2");
         },
         () => {
           /* no-op */
@@ -1035,8 +1542,7 @@ function loadRemoteGun2(playerId, gun2Start) {
           const start = gun2Start || rp.gun2World;
           setupGunMesh(gun2, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
           gun2.name = `weapon-gun2-${playerId}`;
-          rp.group.add(gun2);
-          rp.gun2Root = gun2;
+          attachRemoteWeapon(playerId, gun2, "gun2");
         },
         () => {
           /* no-op */
@@ -1052,7 +1558,8 @@ function spawnRemotePlayer(
   gun2Remote,
   remoteHits = 0,
   remoteDefeated = false,
-  remoteDamageSeq = 0
+  remoteDamageSeq = 0,
+  remoteWeaponType = "gun2"
 ) {
   const remoteGun2 = {
     x: typeof gun2Remote?.x === "number" && isFinite(gun2Remote.x) ? gun2Remote.x : gun2World.x,
@@ -1079,18 +1586,20 @@ function spawnRemotePlayer(
         remotePlayers.set(playerId, {
           group,
           gun2Root: null,
+          weaponRoot: null,
           gun2World: remoteGun2,
           colorHex: playerColor,
           hits: initialHits,
           defeated: !!remoteDefeated,
           damageSeq: Math.max(0, Math.floor(Number(remoteDamageSeq) || 0)),
+          weaponType: normalizedWeaponType(remoteWeaponType),
           playerName: playerName || compactPlayerId(playerId),
           targetPos: new THREE.Vector3(fixedSpawn.x, 0, fixedSpawn.z),
           targetRotY: fixedSpawn.yaw
         });
-        setPlayerEliminatedVisual(group, !!remoteDefeated);
+        syncRemoteDefeatVisual(remotePlayers.get(playerId));
         recomputePlayerColors();
-        loadRemoteGun2(playerId, remoteGun2);
+        syncRemoteWeaponByType(playerId, remoteWeaponType);
         remotePlayersLoading.delete(playerId);
       });
     },
@@ -1141,6 +1650,15 @@ function placeInScene(astroGroup, gun2) {
   localDamageSeq = 0;
   localShotSeq = 0;
   localLastHitColorHex = 0xffffff;
+  localWeaponType = "gun2";
+  hasPickedGun3 = false;
+  hasPickedShotgun = false;
+  gun3PickupAvailable = true;
+  gun3OwnerPlayerId = "";
+  shotgunPickupAvailable = true;
+  shotgunOwnerPlayerId = "";
+  removeGun3Pickup();
+  removeShotgunPickup();
   const persistedState = loadPersistedLocalCombatState();
   if (persistedState) {
     localHits = persistedState.hits;
@@ -1164,6 +1682,8 @@ function placeInScene(astroGroup, gun2) {
     astroGroup.add(gun2);
     gun2.position.set(gun2World.x, gun2World.y, gun2World.z);
   }
+  spawnGun3Pickup();
+  spawnShotgunPickup();
   setStatus("Listo. WASD mover · mouse cámara/personaje · click izquierdo dispara · CVBN arma 2 · sync.", true);
   queueMicrotask(() => {
     enviarVista({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
@@ -1176,6 +1696,9 @@ function placeInScene(astroGroup, gun2) {
 bindKeys();
 bindMouseLook();
 bindDefeatActions();
+initGun1ShotSfx();
+initGun3ShotSfx();
+initShotgunShotSfx();
 if (canvas) {
   canvas.addEventListener("click", () => canvas.focus({ preventScroll: true }));
 }
