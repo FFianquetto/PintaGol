@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cargando Partida Zombie - Pinta Gol</title>
+  <link rel="stylesheet" href="css/carga-zombie.css">
+</head>
+<body>
+  <main class="loading-screen-zombie">
+    <section class="matchmaking-card-zombie" role="status" aria-live="polite">
+      <div class="matchmaking-spinner-zombie"></div>
+      <h1 id="zombie-title">Buscando partida Zombie...</h1>
+      <p id="zombie-text">Emparejando jugadores del modo zombie.</p>
+      <p id="zombie-player" class="zombie-line">Jugador:</p>
+      <p id="zombie-weapon" class="zombie-line">Arma seleccionada:</p>
+      <p id="zombie-count" class="zombie-count">0 / 4 jugadores conectados</p>
+      <div id="zombie-users" class="zombie-users"></div>
+      <button type="button" id="btn-cancelar-zombie" class="zombie-cancel">Cancelar búsqueda</button>
+    </section>
+  </main>
+  <script src="js/zombie/store-zombie.js"></script>
+  <script src="js/zombie/matchmaking-zombie.js"></script>
+  <script src="js/carga-zombie.js"></script>
+</body>
+</html>

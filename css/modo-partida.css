@@ -1,0 +1,39 @@
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; }
+body {
+  font-family: 'Crimson Pro', Georgia, serif;
+  background: radial-gradient(circle at top, rgba(14,165,233,0.25), transparent 30%), #0b1324;
+  color: #f8fafc;
+}
+.modo-screen {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+}
+.modo-card {
+  width: min(560px, 100%);
+  border-radius: 18px;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255,255,255,0.14);
+  text-align: center;
+}
+.modo-actions {
+  margin-top: 1.1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+.modo-btn, .modo-back {
+  border: none;
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.modo-btn-batalla { background: linear-gradient(180deg, #22c55e, #16a34a); color: #052e16; }
+.modo-btn-zombie { background: linear-gradient(180deg, #84cc16, #4d7c0f); color: #1a2e05; }
+.modo-back { margin-top: 1rem; width: 100%; background: #334155; color: #f8fafc; }

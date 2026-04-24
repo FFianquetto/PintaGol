@@ -118,6 +118,16 @@ const LOCAL_PLAYER_ID = resolveLocalPlayerId(LOCAL_PLAYER_NAME);
 const LOCAL_PLAYER_LABEL = LOCAL_PLAYER_NAME || "Jugador";
 const LOCAL_STATE_KEY = `pintagol_astro_state_${LOCAL_PLAYER_ID}`;
 let localPlayerColor = PLAYER_COLORS[0];
+const QUERY_PARAMS = new URLSearchParams(window.location.search);
+const INITIAL_WEAPON_QUERY = (QUERY_PARAMS.get("countryKey") || "").toLowerCase();
+const CURRENT_GAME_ID = QUERY_PARAMS.get("game") || "";
+let pendingInitialWeaponType = null;
+
+function sendSyncMessage(payload) {
+  const next = { ...(payload || {}) };
+  if (CURRENT_GAME_ID) next.gameId = CURRENT_GAME_ID;
+  enviarVista(next);
+}
 
 (function renderLocalPlayerNameHud() {
   showLocalPlayerName(playerNameHud, LOCAL_PLAYER_NAME);
@@ -292,7 +302,9 @@ function setWeaponType(nextWeaponType) {
 }
 
 function normalizedWeaponType(raw) {
-  if (raw === "gun3" || raw === "shotgun") return raw;
+  if (raw === "gun3" || raw === "shotgun" || raw === "gun4") {
+    return raw === "gun4" ? "shotgun" : raw;
+  }
   return "gun2";
 }
 
@@ -379,7 +391,7 @@ function equipGun3Local() {
   gun2Root = gun3;
   astroRoot.add(gun3);
   setWeaponType("gun3");
-  enviarVista({
+  sendSyncMessage({
     tipo: "gun3State",
     available: false,
     ownerPlayerId: LOCAL_PLAYER_ID
@@ -402,7 +414,7 @@ function equipShotgunLocal() {
   gun2Root = shotgun;
   astroRoot.add(shotgun);
   setWeaponType("shotgun");
-  enviarVista({
+  sendSyncMessage({
     tipo: "shotgunState",
     available: false,
     ownerPlayerId: LOCAL_PLAYER_ID
@@ -824,11 +836,12 @@ function sendPose() {
   msg.gun3OwnerPlayerId = gun3OwnerPlayerId;
   msg.shotgunPickupAvailable = shotgunPickupAvailable;
   msg.shotgunOwnerPlayerId = shotgunOwnerPlayerId;
-  enviarVista(msg);
+  sendSyncMessage(msg);
 }
 
 function manejarRemoto(d) {
   if (!d) return;
+  if (CURRENT_GAME_ID && (!d.gameId || d.gameId !== CURRENT_GAME_ID)) return;
   if (d.tipo === "pedirSync") {
     if (!d.playerId || d.playerId !== LOCAL_PLAYER_ID) sendPose();
     return;
@@ -983,7 +996,7 @@ function handleRemoteHit(d) {
   addHitStain(astroRoot, hitColorHex);
   applyHitToLocalPlayer(hitColorHex, hitDamage);
   sendPose();
-  enviarVista({
+  sendSyncMessage({
     tipo: "damage",
     playerId: LOCAL_PLAYER_ID,
     hits: localHits,
@@ -1131,7 +1144,7 @@ function shootIfReady(nowMs) {
   else playGun1ShotSfx();
   localShotSeq += 1;
   const shotId = `${LOCAL_PLAYER_ID}:${localShotSeq}`;
-  enviarVista({
+  sendSyncMessage({
     tipo: "shot",
     playerId: LOCAL_PLAYER_ID,
     shotId,
@@ -1201,7 +1214,7 @@ function processBulletHits() {
         addHitStain(astroRoot, hitColorHex);
         applyHitToLocalPlayer(hitColorHex, hitDamage);
         sendPose();
-        enviarVista({
+        sendSyncMessage({
           tipo: "damage",
           playerId: LOCAL_PLAYER_ID,
           hits: localHits,
@@ -1218,7 +1231,7 @@ function processBulletHits() {
         if (bulletSegmentHitsAstronaut(prevPos, currPos, rp.group)) {
           const hitColorHex = bullet.userData?.colorHex ?? localPlayerColor;
           const hitDamage = Math.max(1, Math.floor(Number(bullet.userData?.damage) || 1));
-          enviarVista({
+          sendSyncMessage({
             tipo: "hit",
             playerId: LOCAL_PLAYER_ID,
             targetPlayerId,
@@ -1422,6 +1435,9 @@ function loadGun3Template() {
           );
           gun3Template = gun3;
           spawnGun3Pickup();
+          if (pendingInitialWeaponType === "gun3") {
+            equipGun3Local();
+          }
         },
         () => {
           gun3Template = null;
@@ -1441,6 +1457,9 @@ function loadGun3Template() {
           );
           gun3Template = gun3;
           spawnGun3Pickup();
+          if (pendingInitialWeaponType === "gun3") {
+            equipGun3Local();
+          }
         },
         () => {
           gun3Template = null;
@@ -1467,6 +1486,9 @@ function loadShotgunTemplate() {
           );
           shotgunTemplate = shotgunObj;
           spawnShotgunPickup();
+          if (pendingInitialWeaponType === "shotgun") {
+            equipShotgunLocal();
+          }
         },
         () => {
           shotgunTemplate = null;
@@ -1486,6 +1508,9 @@ function loadShotgunTemplate() {
           );
           shotgunTemplate = shotgunObj;
           spawnShotgunPickup();
+          if (pendingInitialWeaponType === "shotgun") {
+            equipShotgunLocal();
+          }
         },
         () => {
           shotgunTemplate = null;
@@ -1650,7 +1675,7 @@ function placeInScene(astroGroup, gun2) {
   localDamageSeq = 0;
   localShotSeq = 0;
   localLastHitColorHex = 0xffffff;
-  localWeaponType = "gun2";
+  localWeaponType = normalizedWeaponType(INITIAL_WEAPON_QUERY || "gun2");
   hasPickedGun3 = false;
   hasPickedShotgun = false;
   gun3PickupAvailable = true;
@@ -1684,9 +1709,19 @@ function placeInScene(astroGroup, gun2) {
   }
   spawnGun3Pickup();
   spawnShotgunPickup();
+  // En zombie-sync usamos countryKey para transportar el arma inicial elegida.
+  if (localWeaponType === "gun3") {
+    pendingInitialWeaponType = "gun3";
+    equipGun3Local();
+  } else if (localWeaponType === "shotgun") {
+    pendingInitialWeaponType = "shotgun";
+    equipShotgunLocal();
+  } else {
+    pendingInitialWeaponType = null;
+  }
   setStatus("Listo. WASD mover · mouse cámara/personaje · click izquierdo dispara · CVBN arma 2 · sync.", true);
   queueMicrotask(() => {
-    enviarVista({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
+    sendSyncMessage({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
     if (getVentanaId() !== "2") {
       sendPose();
     }
@@ -1718,7 +1753,7 @@ iniciarVistaSync()
     window.__PINTAGOL_VISTA_TRANSPORT__ = getTransportLabel;
     onVistaMessage(manejarRemoto);
     setVistaEstadoElement(document.getElementById("estado-red"));
-    enviarVista({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
+    sendSyncMessage({ tipo: "pedirSync", playerId: LOCAL_PLAYER_ID });
   })
   .catch((e) => {
     console.error(e);

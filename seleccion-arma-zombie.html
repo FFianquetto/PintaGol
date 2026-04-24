@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Selección de Arma Zombie - Pinta Gol</title>
+  <link rel="stylesheet" href="css/seleccion-arma-zombie.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="zombie-container">
+    <canvas id="zombie-canvas"></canvas>
+    <div id="zombie-overlay">
+      <div id="zombie-panel">
+        <h2 id="zombie-title">SELECCIONA ARMA</h2>
+        <p class="zombie-subtitle">Ingresa tu nombre y elige equipo para el modo zombie.</p>
+        <div class="player-name-wrap">
+          <label for="zombie-player-name-input">Nombre del jugador</label>
+          <div class="player-name-row">
+            <input id="zombie-player-name-input" type="text" maxlength="20" placeholder="Ej. Fer" autocomplete="nickname">
+            <button type="button" id="btn-buscar-zombie" disabled>Buscar partida</button>
+          </div>
+        </div>
+        <p id="zombie-weapon-msg" class="zombie-weapon-msg" aria-live="polite"></p>
+        <div id="zombie-weapons-grid" class="zombie-weapons-grid">
+          <button type="button" class="zombie-weapon-slot" data-weapon="gun2" data-label="Subfusil">
+            <span class="weapon-name">Subfusil</span>
+          </button>
+          <button type="button" class="zombie-weapon-slot" data-weapon="gun3" data-label="Pistola">
+            <span class="weapon-name">Pistola</span>
+          </button>
+          <button type="button" class="zombie-weapon-slot" data-weapon="gun4" data-label="Shotgun">
+            <span class="weapon-name">Shotgun</span>
+          </button>
+        </div>
+        <button type="button" id="btn-volver-zombie">Volver</button>
+      </div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/seleccion-arma-zombie.js"></script>
+</body>
+</html>

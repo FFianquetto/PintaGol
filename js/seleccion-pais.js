@@ -188,7 +188,7 @@
         if (!selectedCountry || !playerName) return;
         persistSelection();
         window.location.href =
-          'carga-partida?pais=' + encodeURIComponent(selectedCountry.label) +
+          'carga-partida.html?pais=' + encodeURIComponent(selectedCountry.label) +
           '&countryKey=' + encodeURIComponent(selectedCountry.key) +
           '&playerName=' + encodeURIComponent(playerName);
       });

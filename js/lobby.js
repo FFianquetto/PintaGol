@@ -177,7 +177,7 @@
         window.location.href = 'pausa.html';
         break;
       case 'buscar-partida':
-        window.location.href = 'seleccion-pais.html';
+        window.location.href = 'modo-partida.html';
         break;
       case 'configuracion':
         window.location.href = 'configuracion.html';

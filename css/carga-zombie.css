@@ -1,0 +1,77 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html, body {
+  width: 100%;
+  height: 100%;
+}
+body {
+  font-family: 'Crimson Pro', Georgia, serif;
+  background: radial-gradient(circle at top right, rgba(132, 204, 22, 0.22), transparent 26%), linear-gradient(180deg, #081120 0%, #0a1f16 100%);
+  color: #f8fafc;
+}
+.loading-screen-zombie {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.matchmaking-card-zombie {
+  width: min(460px, 100%);
+  padding: 2rem 1.5rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(18, 40, 26, 0.96), rgba(10, 27, 18, 0.96));
+  border: 1px solid rgba(190, 242, 100, 0.2);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.matchmaking-spinner-zombie {
+  width: 66px;
+  height: 66px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  border: 6px solid rgba(255, 255, 255, 0.14);
+  border-top-color: #84cc16;
+  border-right-color: #bef264;
+  box-shadow: inset 0 0 18px rgba(190, 242, 100, 0.25);
+}
+.zombie-line {
+  margin-top: 0.8rem;
+  color: #bef264;
+  font-weight: 700;
+}
+.zombie-count {
+  margin-top: 0.9rem;
+  color: #d9f99d;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.zombie-users {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.matchmaking-user {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.zombie-cancel {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #facc15, #eab308);
+  color: #111827;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

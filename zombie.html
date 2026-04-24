@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modo Zombie - Pinta Gol</title>
+  <link rel="stylesheet" href="css/multijugador.css">
+</head>
+<body>
+  <div id="multiplayer-container">
+    <canvas id="multiplayer-canvas" tabindex="0" role="application" aria-label="Modo Zombie"></canvas>
+    <div id="multiplayer-overlay">
+      <div class="overlay-topbar">
+        <div class="hud-group">
+          <div class="status-pill">Conectado al modo zombie</div>
+          <div id="multiplayer-player" class="hud-pill">Jugador: -</div>
+          <div id="multiplayer-country" class="hud-pill">Arma: -</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/libs/fflate.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/FBXLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/MTLLoader.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="js/zombie/store-zombie.js"></script>
+  <script src="js/multiplayer/assets.js"></script>
+  <script src="js/zombie/game-scene-zombie.js"></script>
+  <script src="js/multiplayer/game-controls.js"></script>
+  <script src="js/zombie/zombie.js"></script>
+</body>
+</html>
