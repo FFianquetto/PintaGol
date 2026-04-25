@@ -1,0 +1,191 @@
+/* Redes sociales - Pinta Gol (alineado con lobby/comunidad) */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: 'Crimson Pro', Georgia, serif;
+  color: #e8f4fc;
+  background: radial-gradient(ellipse at 50% 0%, #1e3a5f 0%, #0c1222 55%, #050810 100%);
+}
+
+#redes-container {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+#redes-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+#redes-header h1 {
+  font-size: clamp(1.5rem, 4vw, 1.9rem);
+  color: #86efac;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  letter-spacing: 0.04em;
+}
+
+#redes-header p {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  opacity: 0.9;
+  line-height: 1.45;
+}
+
+#aviso-config {
+  display: none;
+  background: rgba(180, 83, 9, 0.25);
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  color: #fef9c3;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+#aviso-config.visible {
+  display: block;
+}
+
+.panel {
+  background: rgba(12, 18, 34, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.15rem 1.25rem 1.35rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+}
+
+.panel h2 {
+  font-size: 1rem;
+  color: #fde047;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+  opacity: 0.9;
+}
+
+input[type="email"],
+input[type="password"] {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+input:focus {
+  outline: 2px solid #3b82f6;
+  border-color: transparent;
+}
+
+.fila-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.btn {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn-prim {
+  background: linear-gradient(155deg, #166534 0%, #16a34a 100%);
+}
+
+.btn-sec {
+  background: linear-gradient(155deg, #1e40af 0%, #3b82f6 100%);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-facebook {
+  background: linear-gradient(155deg, #1877f2 0%, #0a58c4 100%);
+}
+
+.btn-instagram {
+  background: linear-gradient(145deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+
+#estado-sesion {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+#estado-sesion .ok {
+  color: #86efac;
+}
+
+#estado-sesion .aviso {
+  color: #fde68a;
+}
+
+#estado-sesion .err {
+  color: #fca5a5;
+}
+
+#btn-volver {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  margin: 1.5rem auto 0;
+  font-family: inherit;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.25);
+  color: #e8f4fc;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  transition: background 0.2s, transform 0.15s;
+}
+
+#btn-volver:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.02);
+}
+
+#log-lineas {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  max-height: 6em;
+  overflow: auto;
+}

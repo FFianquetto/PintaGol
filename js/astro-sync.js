@@ -98,6 +98,14 @@ const PLAYER_COLORS = [0x3b82f6, 0xffffff, 0x22c55e, 0xeab308];
 const MAX_HITS = 20;
 const STAIN_DURATION_MS = 5000;
 
+/** Modo extra en la misma escena (p. ej. zombie PvE). No mezclar con colisión de jugador. */
+const _pintagolSceneBulletHandlers = [];
+const _pintagolSceneFrameHandlers = [];
+const _pintagolZombieVistaHandlers = [];
+const _pintagolPedirSyncListeners = [];
+/** Modo zombie: función que devuelve { hits, maxHits, defeated } para replicar en cada `modelo`. */
+let _pintagolZombieSyncForPose = null;
+
 const PLAYER_SPAWNS = [
   { x: -18, z: -18, yaw: Math.PI / 4 },
   { x: 18, z: -18, yaw: (3 * Math.PI) / 4 },
@@ -836,14 +844,45 @@ function sendPose() {
   msg.gun3OwnerPlayerId = gun3OwnerPlayerId;
   msg.shotgunPickupAvailable = shotgunPickupAvailable;
   msg.shotgunOwnerPlayerId = shotgunOwnerPlayerId;
+  if (typeof _pintagolZombieSyncForPose === "function") {
+    try {
+      const zs = _pintagolZombieSyncForPose();
+      if (zs) msg.zombieSync = zs;
+    } catch (_e) {
+      /* noop */
+    }
+  }
   sendSyncMessage(msg);
 }
 
 function manejarRemoto(d) {
   if (!d) return;
   if (CURRENT_GAME_ID && (!d.gameId || d.gameId !== CURRENT_GAME_ID)) return;
+  if (d.tipo === "zombieState") {
+    for (let z = 0; z < _pintagolZombieVistaHandlers.length; z += 1) {
+      _pintagolZombieVistaHandlers[z](d);
+    }
+    return;
+  }
+  if (d.tipo === "modelo" && d.zombieSync && d.playerId && d.playerId !== LOCAL_PLAYER_ID) {
+    const z = d.zombieSync;
+    const out = {
+      tipo: "zombieState",
+      hits: typeof z.hits === "number" && isFinite(z.hits) ? z.hits : 0,
+      maxHits: typeof z.maxHits === "number" && isFinite(z.maxHits) ? z.maxHits : 5,
+      defeated: z.defeated === true
+    };
+    for (let z2 = 0; z2 < _pintagolZombieVistaHandlers.length; z2 += 1) {
+      _pintagolZombieVistaHandlers[z2](out);
+    }
+  }
   if (d.tipo === "pedirSync") {
-    if (!d.playerId || d.playerId !== LOCAL_PLAYER_ID) sendPose();
+    if (!d.playerId || d.playerId !== LOCAL_PLAYER_ID) {
+      sendPose();
+      for (let ps = 0; ps < _pintagolPedirSyncListeners.length; ps += 1) {
+        _pintagolPedirSyncListeners[ps](d);
+      }
+    }
     return;
   }
   if (d.tipo === "hit") {
@@ -1172,10 +1211,11 @@ function applyHitToLocalPlayer(hitColorHex = 0xffffff, damage = 1) {
   }
 }
 
-function bulletHitsAstronaut(bulletPos, astroGroup) {
-  if (!bulletPos || !astroGroup) return false;
-  const g = astroGroup.position;
-  // Colisión aproximada de cápsula: plano XZ + ventana vertical del torso.
+// --- Colisión solo para el rig del jugador / remotos (astronauta) ---
+// Cápsula analítica fija a partir de group.position (no usa geometría FBX). Distinto a mods de escena o zombie.
+function hitPointInAstronautRig(bulletPos, playerGroup) {
+  if (!bulletPos || !playerGroup) return false;
+  const g = playerGroup.position;
   const dx = bulletPos.x - g.x;
   const dz = bulletPos.z - g.z;
   const horizontalHit = dx * dx + dz * dz <= 1.45 * 1.45;
@@ -1185,19 +1225,22 @@ function bulletHitsAstronaut(bulletPos, astroGroup) {
   return bulletPos.y >= yMin && bulletPos.y <= yMax;
 }
 
-function bulletSegmentHitsAstronaut(prevPos, currPos, astroGroup) {
-  if (!prevPos || !currPos || !astroGroup) return false;
-  if (bulletHitsAstronaut(currPos, astroGroup)) return true;
-  // Muestreamos el trayecto para evitar perder impactos por "tunneling".
+function segmentIntersectsAstronautRig(prevPos, currPos, playerGroup) {
+  if (!prevPos || !currPos || !playerGroup) return false;
+  if (hitPointInAstronautRig(currPos, playerGroup)) return true;
   const steps = 6;
   for (let i = 1; i <= steps; i += 1) {
     const t = i / steps;
     const p = new THREE.Vector3().lerpVectors(prevPos, currPos, t);
-    if (bulletHitsAstronaut(p, astroGroup)) return true;
+    if (hitPointInAstronautRig(p, playerGroup)) return true;
   }
   return false;
 }
 
+/**
+ * 1) Handlers de escena (zombie, etc.); 2) recibir disparo al rig local; 3) tú impactas a remotos.
+ * No reutilices la cápsula de astronauta para enemigos: van en módulo aparte.
+ */
 function processBulletHits() {
   if (!activeBullets.length) return;
   for (let i = activeBullets.length - 1; i >= 0; i -= 1) {
@@ -1207,8 +1250,14 @@ function processBulletHits() {
     const prevPos = bullet.userData?.prevPos || bullet.position;
     const currPos = bullet.position;
     let consumed = false;
+    for (let h = 0; h < _pintagolSceneBulletHandlers.length; h += 1) {
+      if (_pintagolSceneBulletHandlers[h]({ prevPos, currPos, bullet, index: i })) {
+        consumed = true;
+        break;
+      }
+    }
     if (astroRoot && !localDefeated && ownerId !== LOCAL_PLAYER_ID) {
-      if (bulletSegmentHitsAstronaut(prevPos, currPos, astroRoot)) {
+      if (segmentIntersectsAstronautRig(prevPos, currPos, astroRoot)) {
         const hitColorHex = bullet.userData?.colorHex ?? 0xffffff;
         const hitDamage = Math.max(1, Math.floor(Number(bullet.userData?.damage) || 1));
         addHitStain(astroRoot, hitColorHex);
@@ -1228,7 +1277,7 @@ function processBulletHits() {
     if (!consumed && ownerId === LOCAL_PLAYER_ID) {
       for (const [targetPlayerId, rp] of remotePlayers) {
         if (!rp || !rp.group || rp.defeated) continue;
-        if (bulletSegmentHitsAstronaut(prevPos, currPos, rp.group)) {
+        if (segmentIntersectsAstronautRig(prevPos, currPos, rp.group)) {
           const hitColorHex = bullet.userData?.colorHex ?? localPlayerColor;
           const hitDamage = Math.max(1, Math.floor(Number(bullet.userData?.damage) || 1));
           sendSyncMessage({
@@ -1328,6 +1377,9 @@ function tickMovement(dt) {
   processBulletHits();
   const nowMs = performance.now();
   refreshAstronautStain(astroRoot, nowMs);
+  for (let f = 0; f < _pintagolSceneFrameHandlers.length; f += 1) {
+    _pintagolSceneFrameHandlers[f]({ camera, scene, dt, clock });
+  }
 
   remotePlayers.forEach((rp) => {
     if (!rp.group) return;
@@ -1709,7 +1761,6 @@ function placeInScene(astroGroup, gun2) {
   }
   spawnGun3Pickup();
   spawnShotgunPickup();
-  // En zombie-sync usamos countryKey para transportar el arma inicial elegida.
   if (localWeaponType === "gun3") {
     pendingInitialWeaponType = "gun3";
     equipGun3Local();
@@ -1766,4 +1817,69 @@ if (btn) {
     u.searchParams.set("ventana", "2");
     window.open(u.toString(), "grafrixAstroSync", "noopener,noreferrer,width=980,height=760");
   });
+}
+
+/** PvE / mods que no sean PvP con rig de astronauta. */
+export function registerPintagolSceneBulletHandler(fn) {
+  if (typeof fn !== "function") {
+    return () => {};
+  }
+  _pintagolSceneBulletHandlers.push(fn);
+  return () => {
+    const j = _pintagolSceneBulletHandlers.indexOf(fn);
+    if (j >= 0) _pintagolSceneBulletHandlers.splice(j, 1);
+  };
+}
+
+export function registerPintagolSceneFrameHandler(fn) {
+  if (typeof fn !== "function") {
+    return () => {};
+  }
+  _pintagolSceneFrameHandlers.push(fn);
+  return () => {
+    const j = _pintagolSceneFrameHandlers.indexOf(fn);
+    if (j >= 0) _pintagolSceneFrameHandlers.splice(j, 1);
+  };
+}
+
+export function registerPintagolZombieVistaHandler(fn) {
+  if (typeof fn !== "function") {
+    return () => {};
+  }
+  _pintagolZombieVistaHandlers.push(fn);
+  return () => {
+    const j = _pintagolZombieVistaHandlers.indexOf(fn);
+    if (j >= 0) _pintagolZombieVistaHandlers.splice(j, 1);
+  };
+}
+
+/** Úsalo p. ej. en modo zombie para reenviar estado (hits) cuando otro cliente pide sync. */
+export function registerPintagolPedirSyncListener(fn) {
+  if (typeof fn !== "function") {
+    return () => {};
+  }
+  _pintagolPedirSyncListeners.push(fn);
+  return () => {
+    const j = _pintagolPedirSyncListeners.indexOf(fn);
+    if (j >= 0) _pintagolPedirSyncListeners.splice(j, 1);
+  };
+}
+
+/** En modo zombie, adjunta { hits, maxHits, defeated } a cada `modelo` (misma frecuencia que el movimiento). */
+export function setPintagolZombieSyncForPose(fn) {
+  _pintagolZombieSyncForPose = typeof fn === "function" ? fn : null;
+}
+
+export function getPintagolSyncScene() {
+  return scene;
+}
+
+export function getPintagolLocalPlayerId() {
+  return LOCAL_PLAYER_ID;
+}
+
+export function sendPintagolVistaMessage(p) {
+  if (p && typeof p === "object") {
+    sendSyncMessage(p);
+  }
 }

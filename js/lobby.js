@@ -188,6 +188,9 @@
       case 'comunidad':
         window.location.href = 'comunidad.html';
         break;
+      case 'redes-sociales':
+        window.location.href = 'redes-sociales.html';
+        break;
       default:
         break;
     }
