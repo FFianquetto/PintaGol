@@ -25,6 +25,24 @@ import {
   applyGun2LocalTransform,
   applyGun2RemoteTransform
 } from "./astro-sync-gun.js";
+import {
+  WORLD_GROUP_SCALE,
+  GUN_NUDGE,
+  GUN_HAND_OFFSET_DEFAULT,
+  GUN2_BASE_ROTATION,
+  GUN3_BASE_ROTATION,
+  SHOTGUN_BASE_ROTATION,
+  GUN2_SCALE,
+  GUN3_HAND_SCALE,
+  SHOTGUN_HAND_SCALE,
+  GUN3_PICKUP_BASE_Y,
+  GUN3_PICKUP_RADIUS,
+  GUN3_PICKUP_CENTER,
+  SHOTGUN_PICKUP_BASE_Y,
+  SHOTGUN_PICKUP_RADIUS,
+  SHOTGUN_PICKUP_CENTER,
+  weaponRotationForType
+} from "./weapon-tuning.js";
 import { spawnBullet, spawnBulletAtPosition, updateBullets } from "./astro-sync-bullets.js";
 import {
   resolveLocalPlayerName,
@@ -61,27 +79,11 @@ const mouseLook = {
   pitchMin: -0.5,
   pitchMax: 0.2
 };
-/** Escala base del mesh (Arena); el grupo se encoge con WORLD_GROUP_SCALE. */
+/** Escala base del mesh (Arena); el grupo se encoge con WORLD_GROUP_SCALE (ver weapon-tuning.js). */
 const ASTRO_SCALE = 0.018;
-/** Encoge el astronauta (el arma usa la misma escala visual). */
-const WORLD_GROUP_SCALE = 0.52;
 
-/** Offset local del arma 2 respecto al astronauta (CVBN). */
-const gun2World = { x: -0.55, y: 2.99, z: 1.8 };
-const GUN_NUDGE = 0.028;
-const GUN2_SCALE = 0.008;
-const GUN2_ROTATION = { rotationX: Math.PI / 4.5, rotationY: -1.8, rotationZ: 0 };
-const GUN3_SCALE = 0.014;
-const GUN3_PICKUP_SCALE = 0.11;
-const GUN3_ROTATION = { rotationX: Math.PI / 6, rotationY: -1.6, rotationZ: 0 };
-const GUN3_PICKUP_BASE_Y = 1.45;
-const GUN3_PICKUP_RADIUS = 2.1;
-const GUN3_PICKUP_CENTER = new THREE.Vector3(0, GUN3_PICKUP_BASE_Y, 0);
-const SHOTGUN_SCALE = 0.11;
-const SHOTGUN_ROTATION = { rotationX: Math.PI / 7, rotationY: -1.55, rotationZ: 0.02 };
-const SHOTGUN_PICKUP_BASE_Y = 1.35;
-const SHOTGUN_PICKUP_RADIUS = 2.1;
-const SHOTGUN_PICKUP_CENTER = new THREE.Vector3(6.2, SHOTGUN_PICKUP_BASE_Y, 0);
+/** Offset local del arma respecto al astronauta (CVBN); copia mutable desde weapon-tuning.js. */
+const gun2World = { x: GUN_HAND_OFFSET_DEFAULT.x, y: GUN_HAND_OFFSET_DEFAULT.y, z: GUN_HAND_OFFSET_DEFAULT.z };
 const BULLET_SCALE = 0.019;
 const BULLET_SPEED = 28;
 const BULLET_COOLDOWN_SUB_MS = 190;
@@ -316,13 +318,6 @@ function normalizedWeaponType(raw) {
   return "gun2";
 }
 
-function weaponRotationForType(weaponType) {
-  const wt = normalizedWeaponType(weaponType);
-  if (wt === "gun3") return GUN3_ROTATION;
-  if (wt === "shotgun") return SHOTGUN_ROTATION;
-  return GUN2_ROTATION;
-}
-
 function weaponDamageForType(weaponType) {
   const wt = normalizedWeaponType(weaponType);
   if (wt === "gun3") return SUBFUSIL_BASE_DAMAGE * PISTOL_DAMAGE_MULTIPLIER;
@@ -394,7 +389,7 @@ function equipGun3Local() {
     gun2Root = null;
   }
   const gun3 = gun3Template.clone(true);
-  setupGunMesh(gun3, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION));
+  setupGunMesh(gun3, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION));
   gun3.name = "weapon-gun3";
   gun2Root = gun3;
   astroRoot.add(gun3);
@@ -417,7 +412,7 @@ function equipShotgunLocal() {
     gun2Root = null;
   }
   const shotgun = shotgunTemplate.clone(true);
-  setupGunMesh(shotgun, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION));
+  setupGunMesh(shotgun, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION));
   shotgun.name = "weapon-shotgun";
   gun2Root = shotgun;
   astroRoot.add(shotgun);
@@ -484,7 +479,7 @@ function loadRemoteGun3(playerId, gunStart) {
         pathsFor("gun3/gun3.obj"),
         (gun3) => {
           const start = gunStart || rp.gun2World;
-          setupGunMesh(gun3, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION));
+          setupGunMesh(gun3, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION));
           gun3.name = `weapon-gun3-${playerId}`;
           attachRemoteWeapon(playerId, gun3, "gun3");
         },
@@ -498,7 +493,7 @@ function loadRemoteGun3(playerId, gunStart) {
         pathsFor("gun3/gun3.obj"),
         (gun3) => {
           const start = gunStart || rp.gun2World;
-          setupGunMesh(gun3, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION));
+          setupGunMesh(gun3, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION));
           gun3.name = `weapon-gun3-${playerId}`;
           attachRemoteWeapon(playerId, gun3, "gun3");
         },
@@ -521,7 +516,7 @@ function loadRemoteShotgun(playerId, gunStart) {
         pathsFor("gun4/shotgun.obj"),
         (shotgunObj) => {
           const start = gunStart || rp.gun2World;
-          setupGunMesh(shotgunObj, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION));
+          setupGunMesh(shotgunObj, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION));
           shotgunObj.name = `weapon-shotgun-${playerId}`;
           attachRemoteWeapon(playerId, shotgunObj, "shotgun");
         },
@@ -535,7 +530,7 @@ function loadRemoteShotgun(playerId, gunStart) {
         pathsFor("gun4/shotgun.obj"),
         (shotgunObj) => {
           const start = gunStart || rp.gun2World;
-          setupGunMesh(shotgunObj, null, WORLD_GROUP_SCALE, start, gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION));
+          setupGunMesh(shotgunObj, null, WORLD_GROUP_SCALE, start, gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION));
           shotgunObj.name = `weapon-shotgun-${playerId}`;
           attachRemoteWeapon(playerId, shotgunObj, "shotgun");
         },
@@ -1427,7 +1422,7 @@ function loadGun2AndPlace(astroGroup) {
       loadFbxFirst(
         pathsFor("gun2/gun2.fbx"),
         (gun2) => {
-          setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
+          setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_BASE_ROTATION));
           gun2.name = "weapon-gun2";
           placeInScene(astroGroup, gun2);
         },
@@ -1438,7 +1433,7 @@ function loadGun2AndPlace(astroGroup) {
       loadFbxFirst(
         pathsFor("gun2/gun2.fbx"),
         (gun2) => {
-          setupGunMesh(gun2, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
+          setupGunMesh(gun2, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_BASE_ROTATION));
           gun2.name = "weapon-gun2";
           placeInScene(astroGroup, gun2);
         },
@@ -1483,7 +1478,7 @@ function loadGun3Template() {
             gunTex,
             WORLD_GROUP_SCALE,
             { x: 0, y: GUN3_PICKUP_BASE_Y, z: 0 },
-            gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION)
+            gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION)
           );
           gun3Template = gun3;
           spawnGun3Pickup();
@@ -1505,7 +1500,7 @@ function loadGun3Template() {
             null,
             WORLD_GROUP_SCALE,
             { x: 0, y: GUN3_PICKUP_BASE_Y, z: 0 },
-            gunSetupOptions(GUN3_PICKUP_SCALE, GUN3_ROTATION)
+            gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION)
           );
           gun3Template = gun3;
           spawnGun3Pickup();
@@ -1534,7 +1529,7 @@ function loadShotgunTemplate() {
             gunTex,
             WORLD_GROUP_SCALE,
             { x: SHOTGUN_PICKUP_CENTER.x, y: SHOTGUN_PICKUP_BASE_Y, z: SHOTGUN_PICKUP_CENTER.z },
-            gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION)
+            gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION)
           );
           shotgunTemplate = shotgunObj;
           spawnShotgunPickup();
@@ -1556,7 +1551,7 @@ function loadShotgunTemplate() {
             null,
             WORLD_GROUP_SCALE,
             { x: SHOTGUN_PICKUP_CENTER.x, y: SHOTGUN_PICKUP_BASE_Y, z: SHOTGUN_PICKUP_CENTER.z },
-            gunSetupOptions(SHOTGUN_SCALE, SHOTGUN_ROTATION)
+            gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION)
           );
           shotgunTemplate = shotgunObj;
           spawnShotgunPickup();
@@ -1603,7 +1598,7 @@ function loadRemoteGun2(playerId, gun2Start) {
         pathsFor("gun2/gun2.fbx"),
         (gun2) => {
           const start = gun2Start || rp.gun2World;
-          setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
+          setupGunMesh(gun2, gunTex, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_BASE_ROTATION));
           gun2.name = `weapon-gun2-${playerId}`;
           attachRemoteWeapon(playerId, gun2, "gun2");
         },
@@ -1617,7 +1612,7 @@ function loadRemoteGun2(playerId, gun2Start) {
         pathsFor("gun2/gun2.fbx"),
         (gun2) => {
           const start = gun2Start || rp.gun2World;
-          setupGunMesh(gun2, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_ROTATION));
+          setupGunMesh(gun2, null, WORLD_GROUP_SCALE, start, gunSetupOptions(GUN2_SCALE, GUN2_BASE_ROTATION));
           gun2.name = `weapon-gun2-${playerId}`;
           attachRemoteWeapon(playerId, gun2, "gun2");
         },

@@ -1,12 +1,12 @@
 # Blender 4.5.2 LTS MTL File: 'None'
 # www.blender.org
 
-newmtl M_Stylized_Pistol.001
+newmtl M_Stylized_Pistol.002
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
 Ni 1.500000
 illum 2
-map_Kd C:/Users/cuale/Music/Fer_UANL/8vo Semestre/Grafrix_Web/Avance2/assets/models/gun3/Textures/PBR Metalic Roughness/T_Stylized_Pistol_BaseColor.png
-map_Ns C:/Users/cuale/Music/Fer_UANL/8vo Semestre/Grafrix_Web/Avance2/assets/models/gun3/Textures/PBR Metalic Roughness/T_Stylized_Pistol_Normal.png
-map_Ke C:/Users/cuale/Music/Fer_UANL/8vo Semestre/Grafrix_Web/Avance2/assets/models/gun3/Textures/PBR Metalic Roughness/T_Stylized_Pistol_Emissive.png
-map_d C:/Users/cuale/Music/Fer_UANL/8vo Semestre/Grafrix_Web/Avance2/assets/models/gun3/Textures/PBR Metalic Roughness/T_Stylized_Pistol_BaseColor.png
+map_Kd Textures/PBR Metalic Roughness/T_Stylized_Pistol_BaseColor.png
+map_Ns Textures/PBR Metalic Roughness/T_Stylized_Pistol_Normal.png
+map_Ke Textures/PBR Metalic Roughness/T_Stylized_Pistol_Emissive.png
+map_d Textures/PBR Metalic Roughness/T_Stylized_Pistol_BaseColor.png
