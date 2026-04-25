@@ -16,6 +16,17 @@
       <p id="zombie-weapon" class="zombie-line">Arma seleccionada:</p>
       <p id="zombie-count" class="zombie-count">0 / 4 jugadores conectados</p>
       <div id="zombie-users" class="zombie-users"></div>
+      <section id="zombie-map-vote-panel" class="zombie-map-vote-panel" hidden>
+        <h2>Votacion de mapa</h2>
+        <p id="zombie-map-vote-text">Cuando esten los 4 jugadores, voten una estacion.</p>
+        <div class="zombie-map-vote-actions">
+          <button type="button" class="zombie-map-vote-btn" data-season="invierno">Invierno</button>
+          <button type="button" class="zombie-map-vote-btn" data-season="primavera">Primavera</button>
+          <button type="button" class="zombie-map-vote-btn" data-season="otono">Otono</button>
+        </div>
+        <p id="zombie-map-vote-picked" class="zombie-map-vote-picked"></p>
+        <p id="zombie-map-vote-counts" class="zombie-map-vote-counts"></p>
+      </section>
       <button type="button" id="btn-cancelar-zombie" class="zombie-cancel">Cancelar búsqueda</button>
     </section>
   </main>

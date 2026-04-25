@@ -2,6 +2,37 @@
   'use strict';
 
   var assets = window.PintaGolMultiplayerAssets;
+  var textureLoader = new THREE.TextureLoader();
+  var TEXTURE_BASE_CANDIDATES = [
+    'assets/textures/',
+    '/assets/textures/',
+    '../assets/textures/'
+  ];
+
+  function buildTextureCandidates(relativePath) {
+    return TEXTURE_BASE_CANDIDATES.map(function (base) {
+      return base + relativePath;
+    });
+  }
+
+  function loadTextureFromCandidates(paths, onLoad) {
+    var index = 0;
+    function tryNext() {
+      if (index >= paths.length) return;
+      var url = paths[index++];
+      textureLoader.load(
+        url,
+        function (texture) {
+          onLoad(texture);
+        },
+        undefined,
+        function () {
+          tryNext();
+        }
+      );
+    }
+    tryNext();
+  }
 
   function createScene(canvas) {
     var scene = new THREE.Scene();
@@ -9,20 +40,56 @@
     var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     var heroesById = {};
 
-    // Mismo fondo base que astro-sync / galería
+    // Fallback inicial mientras carga la textura del cielo.
     scene.background = new THREE.Color(0x0f172a);
     camera.position.set(0, 1.3, 7.5);
     camera.lookAt(0, 1.2, 0);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
+    var floorMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.95,
+      metalness: 0.02
+    });
     var floor = new THREE.Mesh(
       new THREE.PlaneGeometry(18, 12, 1, 1),
-      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.95, metalness: 0.02 })
+      floorMaterial
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -1.45;
     scene.add(floor);
+
+    loadTextureFromCandidates(buildTextureCandidates('snow.jpg'), function (snowTexture) {
+      if (typeof THREE.SRGBColorSpace !== 'undefined') {
+        snowTexture.colorSpace = THREE.SRGBColorSpace;
+      }
+      snowTexture.wrapS = THREE.RepeatWrapping;
+      snowTexture.wrapT = THREE.RepeatWrapping;
+      snowTexture.repeat.set(6, 4);
+      floorMaterial.map = snowTexture;
+      floorMaterial.color.setHex(0xffffff);
+      floorMaterial.needsUpdate = true;
+    });
+
+    var skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(320, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide })
+    );
+    scene.add(skyDome);
+    loadTextureFromCandidates(buildTextureCandidates('sky.jpg'), function (skyTexture) {
+      if (typeof THREE.SRGBColorSpace !== 'undefined') {
+        skyTexture.colorSpace = THREE.SRGBColorSpace;
+      }
+      skyTexture.wrapS = THREE.RepeatWrapping;
+      skyTexture.wrapT = THREE.ClampToEdgeWrapping;
+      skyTexture.repeat.set(1, 1);
+      skyTexture.offset.set(0.25, 0);
+      skyDome.material.map = skyTexture;
+      skyDome.material.needsUpdate = true;
+      // Evita que un color de fondo tape el skydome.
+      scene.background = null;
+    });
 
     var grid = new THREE.GridHelper(18, 18, 0x475569, 0x1e293b);
     grid.position.y = -1.43;

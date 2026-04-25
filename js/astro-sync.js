@@ -56,6 +56,7 @@ const PNG_URLS = ["assets/models/astro/astronout.jpg", "/assets/models/astro/ast
 
 /** Mismas bases que multijugador (assets.js) para encontrar modelos. */
 const MODEL_BASES = ["assets/models/", "/assets/models/", "../assets/models/"];
+const TEXTURE_BASES = ["assets/textures/", "/assets/textures/", "../assets/textures/"];
 
 const ASTRO_BORDE = 18;
 /** Cámara alejada y alta para ver cuerpo + arma sin “zoom” excesivo. */
@@ -99,6 +100,9 @@ const GUN1_SHOT_POOL_SIZE = 4;
 const PLAYER_COLORS = [0x3b82f6, 0xffffff, 0x22c55e, 0xeab308];
 const MAX_HITS = 20;
 const STAIN_DURATION_MS = 5000;
+const MEDKIT_HEAL_AMOUNT = 5;
+const MEDKIT_PICKUP_RADIUS = 1.8;
+const MEDKIT_PICKUP_CENTER = new THREE.Vector3(0, 0.45, 0);
 
 /** Modo extra en la misma escena (p. ej. zombie PvE). No mezclar con colisión de jugador. */
 const _pintagolSceneBulletHandlers = [];
@@ -127,11 +131,36 @@ const LOCAL_PLAYER_NAME = resolveLocalPlayerName();
 const LOCAL_PLAYER_ID = resolveLocalPlayerId(LOCAL_PLAYER_NAME);
 const LOCAL_PLAYER_LABEL = LOCAL_PLAYER_NAME || "Jugador";
 const LOCAL_STATE_KEY = `pintagol_astro_state_${LOCAL_PLAYER_ID}`;
+const ACTIVE_MATCH_KEY = "pintagol_active_match";
+const SEASON_TO_FLOOR_TEXTURE = {
+  invierno: "snow.jpg",
+  primavera: "grass.jpg",
+  otono: "orange.png"
+};
+const SEASON_TO_SKY_TEXTURE = {
+  invierno: "sky.jpg",
+  primavera: "sky.jpg",
+  otono: "orangesky.jpg"
+};
 let localPlayerColor = PLAYER_COLORS[0];
 const QUERY_PARAMS = new URLSearchParams(window.location.search);
 const INITIAL_WEAPON_QUERY = (QUERY_PARAMS.get("countryKey") || "").toLowerCase();
 const CURRENT_GAME_ID = QUERY_PARAMS.get("game") || "";
+const SELECTED_SEASON_KEY = resolveSeasonKey();
 let pendingInitialWeaponType = null;
+
+function resolveSeasonKey() {
+  const byQuery = (QUERY_PARAMS.get("season") || "").toLowerCase();
+  if (SEASON_TO_FLOOR_TEXTURE[byQuery]) return byQuery;
+  try {
+    const cached = JSON.parse(window.sessionStorage.getItem(ACTIVE_MATCH_KEY) || "null");
+    const bySession = String((cached && cached.seasonKey) || "").toLowerCase();
+    if (SEASON_TO_FLOOR_TEXTURE[bySession]) return bySession;
+  } catch (_err) {
+    /* no-op */
+  }
+  return "invierno";
+}
 
 function sendSyncMessage(payload) {
   const next = { ...(payload || {}) };
@@ -171,7 +200,51 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const di = new THREE.DirectionalLight(0xffffff, 0.95);
 di.position.set(2.5, 4, 3.5);
 scene.add(di);
-scene.add(new THREE.GridHelper(140, 140, 0x475569, 0x1e293b));
+const groundMaterial = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 0.96,
+  metalness: 0.02
+});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220, 1, 1), groundMaterial);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.02;
+scene.add(ground);
+
+loadTextureFirst(
+  texturePathsFor(SEASON_TO_FLOOR_TEXTURE[SELECTED_SEASON_KEY] || "snow.jpg"),
+  (snowTex) => {
+    prepTex(snowTex, aniso);
+    snowTex.wrapS = THREE.RepeatWrapping;
+    snowTex.wrapT = THREE.RepeatWrapping;
+    snowTex.repeat.set(28, 28);
+    groundMaterial.map = snowTex;
+    groundMaterial.needsUpdate = true;
+  },
+  () => {
+    /* no-op: mantiene color base */
+  }
+);
+
+const skyDome = new THREE.Mesh(
+  new THREE.SphereGeometry(1000, 48, 32),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide })
+);
+scene.add(skyDome);
+loadTextureFirst(
+  texturePathsFor(SEASON_TO_SKY_TEXTURE[SELECTED_SEASON_KEY] || "sky.jpg"),
+  (skyTex) => {
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    skyTex.wrapS = THREE.RepeatWrapping;
+    skyTex.wrapT = THREE.ClampToEdgeWrapping;
+    skyTex.offset.set(0.25, 0);
+    skyDome.material.map = skyTex;
+    skyDome.material.needsUpdate = true;
+    scene.background = null;
+  },
+  () => {
+    /* no-op: mantiene color de fondo */
+  }
+);
 
 const wander = { x: 0, z: 0, lastRot: 0 };
 const keys = { w: false, a: false, s: false, d: false };
@@ -189,6 +262,8 @@ let gun3Template = null;
 let gun3Pickup = null;
 let shotgunTemplate = null;
 let shotgunPickup = null;
+let medkitTemplate = null;
+let medkitPickup = null;
 let localWeaponType = "gun2";
 let hasPickedGun3 = false;
 let gun3PickupAvailable = true;
@@ -196,6 +271,8 @@ let gun3OwnerPlayerId = "";
 let hasPickedShotgun = false;
 let shotgunPickupAvailable = true;
 let shotgunOwnerPlayerId = "";
+let medkitAvailable = true;
+let medkitOwnerPlayerId = "";
 const activeBullets = [];
 let lastShotAt = 0;
 let localHits = 0;
@@ -377,6 +454,65 @@ function applyShotgunPickupState(available, ownerId = "") {
   shotgunOwnerPlayerId = ownerId || "";
   if (shotgunPickupAvailable) spawnShotgunPickup();
   else removeShotgunPickup();
+}
+
+function removeMedkitPickup() {
+  if (!medkitPickup) return;
+  scene.remove(medkitPickup);
+  medkitPickup = null;
+}
+
+function spawnMedkitPickup() {
+  if (!medkitAvailable || !medkitTemplate || medkitPickup) return;
+  medkitPickup = medkitTemplate.clone(true);
+  medkitPickup.name = "item-medkit-pickup";
+  medkitPickup.position.copy(MEDKIT_PICKUP_CENTER);
+  medkitPickup.rotation.set(0, 0, 0);
+  scene.add(medkitPickup);
+}
+
+function applyMedkitPickupState(available, ownerId = "") {
+  medkitAvailable = !!available;
+  medkitOwnerPlayerId = ownerId || "";
+  if (medkitAvailable) spawnMedkitPickup();
+  else removeMedkitPickup();
+}
+
+function applyHealToLocalPlayer(amount = MEDKIT_HEAL_AMOUNT) {
+  if (!astroRoot) return false;
+  const heal = Math.max(1, Math.floor(Number(amount) || MEDKIT_HEAL_AMOUNT));
+  const prevHits = localHits;
+  localHits = Math.max(0, localHits - heal);
+  if (localHits === prevHits) return false;
+  localDamageSeq += 1;
+  updateNameTag(astroRoot, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
+  persistLocalCombatState();
+  setStatus("Botiquin usado: -5 de dano acumulado.", true);
+  return true;
+}
+
+function tryConsumeMedkitLocal() {
+  if (!medkitAvailable || !medkitPickup || !astroRoot || localDefeated) return;
+  const dx = astroRoot.position.x - medkitPickup.position.x;
+  const dz = astroRoot.position.z - medkitPickup.position.z;
+  if (dx * dx + dz * dz > MEDKIT_PICKUP_RADIUS * MEDKIT_PICKUP_RADIUS) return;
+  applyMedkitPickupState(false, LOCAL_PLAYER_ID);
+  const healed = applyHealToLocalPlayer(MEDKIT_HEAL_AMOUNT);
+  sendSyncMessage({
+    tipo: "medkitState",
+    available: false,
+    ownerPlayerId: LOCAL_PLAYER_ID
+  });
+  if (healed) {
+    sendPose();
+    sendSyncMessage({
+      tipo: "damage",
+      playerId: LOCAL_PLAYER_ID,
+      hits: localHits,
+      defeated: localDefeated,
+      damageSeq: localDamageSeq
+    });
+  }
 }
 
 function equipGun3Local() {
@@ -803,18 +939,45 @@ function createNameTagSprite(labelText, hitRatio = 0) {
 
 function updateNameTag(playerGroup, labelText, hitRatio = 0) {
   if (!playerGroup) return;
+  const normalizedLabel = (labelText && String(labelText).trim()) || "Jugador";
+  const normalizedHit = Math.max(0, Math.min(1, Math.round(hitRatio * 1000) / 1000));
+  const cache = playerGroup.userData && playerGroup.userData.nameTagCache;
+  if (cache && cache.label === normalizedLabel && cache.hitRatio === normalizedHit) {
+    return;
+  }
   const prev = playerGroup.getObjectByName("astro-gametag");
   if (prev) {
     if (prev.material?.map) prev.material.map.dispose?.();
     prev.material?.dispose?.();
     playerGroup.remove(prev);
   }
-  const sprite = createNameTagSprite(labelText, hitRatio);
+  const sprite = createNameTagSprite(normalizedLabel, normalizedHit);
   if (sprite) playerGroup.add(sprite);
+  playerGroup.userData = playerGroup.userData || {};
+  playerGroup.userData.nameTagCache = {
+    label: normalizedLabel,
+    hitRatio: normalizedHit
+  };
+}
+
+function scheduleNonCriticalLoad(task, delayMs = 180) {
+  if (typeof task !== "function") return;
+  const run = () => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(() => task(), { timeout: 600 });
+      return;
+    }
+    window.setTimeout(task, 0);
+  };
+  window.setTimeout(run, delayMs);
 }
 
 function pathsFor(rel) {
   return MODEL_BASES.map((base) => base + rel);
+}
+
+function texturePathsFor(rel) {
+  return TEXTURE_BASES.map((base) => base + rel);
 }
 
 function sendPose() {
@@ -839,6 +1002,8 @@ function sendPose() {
   msg.gun3OwnerPlayerId = gun3OwnerPlayerId;
   msg.shotgunPickupAvailable = shotgunPickupAvailable;
   msg.shotgunOwnerPlayerId = shotgunOwnerPlayerId;
+  msg.medkitAvailable = medkitAvailable;
+  msg.medkitOwnerPlayerId = medkitOwnerPlayerId;
   if (typeof _pintagolZombieSyncForPose === "function") {
     try {
       const zs = _pintagolZombieSyncForPose();
@@ -900,6 +1065,10 @@ function manejarRemoto(d) {
     applyShotgunPickupState(d.available !== false, d.ownerPlayerId || "");
     return;
   }
+  if (d.tipo === "medkitState") {
+    applyMedkitPickupState(d.available !== false, d.ownerPlayerId || "");
+    return;
+  }
   if (d.tipo !== "modelo" || !d.playerId || typeof d.playerId !== "string") return;
   if (d.playerId === LOCAL_PLAYER_ID) return;
   const pos = d.pos;
@@ -912,6 +1081,9 @@ function manejarRemoto(d) {
   }
   if (typeof d.shotgunPickupAvailable === "boolean") {
     applyShotgunPickupState(d.shotgunPickupAvailable, d.shotgunOwnerPlayerId || "");
+  }
+  if (typeof d.medkitAvailable === "boolean") {
+    applyMedkitPickupState(d.medkitAvailable, d.medkitOwnerPlayerId || "");
   }
   const rp = remotePlayers.get(d.playerId);
   if (rp) {
@@ -1296,6 +1468,8 @@ function processBulletHits() {
 
 function tickMovement(dt) {
   if (!astroRoot) return;
+  const nowMs = performance.now();
+  const nowSeconds = nowMs * 0.001;
   if (localDefeated) {
     spectatorMode = true;
   }
@@ -1311,7 +1485,7 @@ function tickMovement(dt) {
   const yawStep = shortestAngleDelta(astroRoot.rotation.y, mouseLook.targetYaw);
   astroRoot.rotation.y += yawStep * 0.22;
   wander.lastRot = astroRoot.rotation.y;
-  const t = performance.now() * 0.001;
+  const t = nowSeconds;
 
   if (!spectatorMode) {
     let mx = Math.sin(astroRoot.rotation.y) * forward + -Math.cos(astroRoot.rotation.y) * strafe;
@@ -1365,12 +1539,12 @@ function tickMovement(dt) {
     sendPose();
   }
 
-  shootIfReady(performance.now());
-  updateGun3Pickup(performance.now());
-  updateShotgunPickup(performance.now());
+  shootIfReady(nowMs);
+  updateGun3Pickup(nowMs);
+  updateShotgunPickup(nowMs);
+  tryConsumeMedkitLocal();
   updateBullets(scene, activeBullets, dt);
   processBulletHits();
-  const nowMs = performance.now();
   refreshAstronautStain(astroRoot, nowMs);
   for (let f = 0; f < _pintagolSceneFrameHandlers.length; f += 1) {
     _pintagolSceneFrameHandlers[f]({ camera, scene, dt, clock });
@@ -1444,10 +1618,90 @@ function loadGun2AndPlace(astroGroup) {
 }
 
 function loadLocalModelsAndFinish(astroGroup) {
+  // Carga crítica para que el jugador aparezca rápido y jugable.
   loadBulletTemplate();
-  loadGun3Template();
-  loadShotgunTemplate();
   loadGun2AndPlace(astroGroup);
+  // Pickups/modelos secundarios en segundo plano para acelerar arranque.
+  scheduleNonCriticalLoad(loadGun3Template, 220);
+  scheduleNonCriticalLoad(loadShotgunTemplate, 280);
+  scheduleNonCriticalLoad(loadMedkitTemplate, 340);
+}
+
+function createFallbackMedkitTemplate() {
+  var group = new THREE.Group();
+  var body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.7, 1),
+    new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5, metalness: 0.08 })
+  );
+  group.add(body);
+  var crossMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.42, metalness: 0.04 });
+  var crossH = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.18, 1.02), crossMat);
+  crossH.position.y = 0.01;
+  crossH.position.z = 0.02;
+  group.add(crossH);
+  var crossV = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.55, 1.02), crossMat);
+  crossV.position.y = 0.01;
+  crossV.position.z = 0.02;
+  group.add(crossV);
+  group.scale.setScalar(0.24);
+  return group;
+}
+
+function applyMedkitMaterials(obj, texture) {
+  obj.traverse((child) => {
+    if (!child.isMesh) return;
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map((material) => {
+        const next = material || new THREE.MeshStandardMaterial({ color: 0xffffff });
+        if (texture) next.map = texture;
+        next.color.setHex(0xffffff);
+        next.needsUpdate = true;
+        return next;
+      });
+      return;
+    }
+    if (!child.material) child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    if (texture) child.material.map = texture;
+    child.material.color.setHex(0xffffff);
+    child.material.needsUpdate = true;
+  });
+}
+
+function loadMedkitTemplate() {
+  loadTextureFirst(
+    pathsFor("medkit/medkit.png"),
+    (medkitTex) => {
+      prepTex(medkitTex, aniso);
+      loadObjFirst(
+        pathsFor("medkit/medkit.obj"),
+        (medkitObj) => {
+          applyMedkitMaterials(medkitObj, medkitTex);
+          medkitObj.scale.setScalar(0.12 * WORLD_GROUP_SCALE);
+          medkitTemplate = medkitObj;
+          spawnMedkitPickup();
+        },
+        () => {
+          medkitTemplate = createFallbackMedkitTemplate();
+          spawnMedkitPickup();
+        }
+      );
+    },
+    () => {
+      loadObjFirst(
+        pathsFor("medkit/medkit.obj"),
+        (medkitObj) => {
+          applyMedkitMaterials(medkitObj, null);
+          medkitObj.scale.setScalar(0.12 * WORLD_GROUP_SCALE);
+          medkitTemplate = medkitObj;
+          spawnMedkitPickup();
+        },
+        () => {
+          medkitTemplate = createFallbackMedkitTemplate();
+          spawnMedkitPickup();
+        }
+      );
+    }
+  );
 }
 
 function loadBulletTemplate() {
@@ -1729,8 +1983,11 @@ function placeInScene(astroGroup, gun2) {
   gun3OwnerPlayerId = "";
   shotgunPickupAvailable = true;
   shotgunOwnerPlayerId = "";
+  medkitAvailable = true;
+  medkitOwnerPlayerId = "";
   removeGun3Pickup();
   removeShotgunPickup();
+  removeMedkitPickup();
   const persistedState = loadPersistedLocalCombatState();
   if (persistedState) {
     localHits = persistedState.hits;
@@ -1756,6 +2013,7 @@ function placeInScene(astroGroup, gun2) {
   }
   spawnGun3Pickup();
   spawnShotgunPickup();
+  spawnMedkitPickup();
   if (localWeaponType === "gun3") {
     pendingInitialWeaponType = "gun3";
     equipGun3Local();

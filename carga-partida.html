@@ -16,6 +16,17 @@
       <p id="matchmaking-country" class="matchmaking-country">País seleccionado:</p>
       <p id="matchmaking-count" class="matchmaking-count">0 / 4 jugadores conectados</p>
       <div id="matchmaking-users" class="matchmaking-users"></div>
+      <section id="map-vote-panel" class="map-vote-panel" hidden>
+        <h2>Votacion de mapa</h2>
+        <p id="map-vote-text">Cuando esten los 4 jugadores, voten una estacion.</p>
+        <div class="map-vote-actions">
+          <button type="button" class="map-vote-btn" data-season="invierno">Invierno</button>
+          <button type="button" class="map-vote-btn" data-season="primavera">Primavera</button>
+          <button type="button" class="map-vote-btn" data-season="otono">Otono</button>
+        </div>
+        <p id="map-vote-picked" class="map-vote-picked"></p>
+        <p id="map-vote-counts" class="map-vote-counts"></p>
+      </section>
       <button type="button" id="btn-cancelar-busqueda" class="cancel-btn">Cancelar búsqueda</button>
     </section>
   </main>

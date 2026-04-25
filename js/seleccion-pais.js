@@ -201,7 +201,6 @@
         setBuscarPartidaEnabled(canSearch());
       });
     }
-
     document.querySelectorAll('.pais-slot').forEach(function (slot) {
       slot.addEventListener('click', onPaisClick);
     });

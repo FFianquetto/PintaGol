@@ -136,13 +136,41 @@
     keyLight.position.set(4, 8, 6);
     scene.add(keyLight);
 
+    var textureLoader = new THREE.TextureLoader();
+    var floorMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.02 });
     var floor = new THREE.Mesh(
       new THREE.PlaneGeometry(18, 12, 1, 1),
-      new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.95, metalness: 0.02 })
+      floorMaterial
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -1.45;
     scene.add(floor);
+
+    textureLoader.load('assets/textures/snow.jpg', function (snowTexture) {
+      if (typeof THREE.SRGBColorSpace !== 'undefined') {
+        snowTexture.colorSpace = THREE.SRGBColorSpace;
+      }
+      snowTexture.wrapS = THREE.RepeatWrapping;
+      snowTexture.wrapT = THREE.RepeatWrapping;
+      snowTexture.repeat.set(6, 4);
+      floorMaterial.map = snowTexture;
+      floorMaterial.needsUpdate = true;
+    });
+
+    var skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(320, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide })
+    );
+    scene.add(skyDome);
+    textureLoader.load('assets/textures/sky.jpg', function (skyTexture) {
+      if (typeof THREE.SRGBColorSpace !== 'undefined') {
+        skyTexture.colorSpace = THREE.SRGBColorSpace;
+      }
+      skyTexture.offset.set(0.25, 0);
+      skyDome.material.map = skyTexture;
+      skyDome.material.needsUpdate = true;
+      scene.background = null;
+    });
 
     return {
       scene: scene,

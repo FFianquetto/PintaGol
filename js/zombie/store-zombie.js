@@ -3,6 +3,7 @@
 
   var ROOM_KEY = 'pintagol_zombie_room';
   var GAME_KEY = 'pintagol_zombie_game';
+  var MAP_VOTE_KEY = 'pintagol_zombie_map_vote';
   var GAME_LOCK_KEY = 'pintagol_zombie_game_lock';
   var SESSION_KEY = 'pintagol_zombie_session_id';
   var STALE_MS = 15000;
@@ -14,6 +15,11 @@
     { x: -6, z: -6, rotationY: Math.PI / 4 },
     { x: 6, z: 6, rotationY: (-3 * Math.PI) / 4 }
   ];
+  var MAP_LABELS = {
+    invierno: 'Invierno',
+    primavera: 'Primavera',
+    otono: 'Otono'
+  };
 
   function now() { return Date.now(); }
   function readJSON(key, fallback) {
@@ -50,6 +56,96 @@
     return (room && room.players ? room.players : []).filter(function (player) {
       return player && player.status !== 'playing';
     });
+  }
+  function selectMatchPlayers(players) {
+    return (players || [])
+      .slice()
+      .sort(function (a, b) {
+        return String(a && a.id || '').localeCompare(String(b && b.id || ''));
+      })
+      .slice(0, REQUIRED_PLAYERS);
+  }
+  function normalizeSeasonKey(raw) {
+    var key = String(raw || '').toLowerCase();
+    if (key === 'invierno' || key === 'primavera' || key === 'otono') return key;
+    return '';
+  }
+  function getVoteToken(players) {
+    var ids = selectMatchPlayers(players)
+      .map(function (player) { return String(player && player.id || ''); })
+      .filter(Boolean)
+    if (ids.length < REQUIRED_PLAYERS) return '';
+    return ids.join('|');
+  }
+  function ensureMapVote(players) {
+    var token = getVoteToken(players);
+    if (!token) return null;
+    var current = readJSON(MAP_VOTE_KEY, null);
+    if (current && current.token === token) return current;
+    var next = {
+      token: token,
+      createdAt: now(),
+      votes: {},
+      resolvedSeasonKey: '',
+      resolvedSeasonLabel: '',
+      resolvedAt: 0
+    };
+    writeJSON(MAP_VOTE_KEY, next);
+    return next;
+  }
+  function getMapVoteState() {
+    return readJSON(MAP_VOTE_KEY, null);
+  }
+  function castMapVote(players, seasonKey) {
+    var normalized = normalizeSeasonKey(seasonKey);
+    if (!normalized) return null;
+    var state = ensureMapVote(players);
+    if (!state || state.resolvedSeasonKey) return state;
+    state.votes = state.votes || {};
+    var playerId = getSessionId();
+    if (state.votes[playerId]) return state;
+    state.votes[playerId] = normalized;
+    writeJSON(MAP_VOTE_KEY, state);
+    return state;
+  }
+  function removeMapVoteForLocalPlayer() {
+    var state = getMapVoteState();
+    if (!state || !state.votes) return;
+    var playerId = getSessionId();
+    if (!state.votes[playerId]) return;
+    delete state.votes[playerId];
+    writeJSON(MAP_VOTE_KEY, state);
+  }
+  function resolveMapVote(players) {
+    var token = getVoteToken(players);
+    if (!token) return null;
+    var state = ensureMapVote(players);
+    if (!state) return null;
+    if (state.resolvedSeasonKey) return state;
+    var eligibleIds = token.split('|');
+    var votesBySeason = { invierno: 0, primavera: 0, otono: 0 };
+    var validVotes = 0;
+    for (var i = 0; i < eligibleIds.length; i++) {
+      var vote = normalizeSeasonKey(state.votes && state.votes[eligibleIds[i]]);
+      if (!vote) continue;
+      votesBySeason[vote] += 1;
+      validVotes += 1;
+    }
+    if (validVotes < REQUIRED_PLAYERS) return state;
+    var keys = ['invierno', 'primavera', 'otono'];
+    var maxVotes = Math.max(votesBySeason.invierno, votesBySeason.primavera, votesBySeason.otono);
+    var leaders = keys.filter(function (key) { return votesBySeason[key] === maxVotes; });
+    var seedSource = String(state.token || '') + '|' + String(state.createdAt || 0);
+    var seed = 0;
+    for (var si = 0; si < seedSource.length; si++) {
+      seed = (seed * 31 + seedSource.charCodeAt(si)) >>> 0;
+    }
+    var winner = leaders[leaders.length ? seed % leaders.length : 0] || 'invierno';
+    state.resolvedSeasonKey = winner;
+    state.resolvedSeasonLabel = MAP_LABELS[winner] || 'Invierno';
+    state.resolvedAt = now();
+    writeJSON(MAP_VOTE_KEY, state);
+    return state;
   }
   function saveRoom(room) {
     room.players = prunePlayers(room.players);
@@ -105,24 +201,40 @@
     if (lock && lock.token === token) window.localStorage.removeItem(GAME_LOCK_KEY);
   }
   function getGame() { return readJSON(GAME_KEY, null); }
-  function createGameIfReady() {
+  function createGameIfReady(options) {
+    var opts = options || {};
+    var normalizedSeason = normalizeSeasonKey(opts.seasonKey);
+    if (!normalizedSeason) return null;
     var room = getRoom();
     var queuePlayers = getQueuePlayers(room);
     if (queuePlayers.length < REQUIRED_PLAYERS) return null;
     var active = getGame();
     if (active && active.status === 'active' && Array.isArray(active.players) && active.players.length >= REQUIRED_PLAYERS) {
-      return active;
+      var expectedToken = getVoteToken(queuePlayers);
+      var activeToken = getVoteToken(active.players || []);
+      var sameSeason = normalizeSeasonKey(active.seasonKey) === normalizedSeason;
+      if (expectedToken && expectedToken === activeToken && sameSeason) {
+        return active;
+      }
+      window.localStorage.removeItem(GAME_KEY);
     }
     var token = acquireGameCreationLock();
-    if (!token) return getGame();
+    if (!token) {
+      var fallback = getGame();
+      if (!fallback || !Array.isArray(fallback.players)) return null;
+      var expectedTokenOnFallback = getVoteToken(queuePlayers);
+      var fallbackToken = getVoteToken(fallback.players || []);
+      var sameSeasonOnFallback = normalizeSeasonKey(fallback.seasonKey) === normalizedSeason;
+      return expectedTokenOnFallback && expectedTokenOnFallback === fallbackToken && sameSeasonOnFallback ? fallback : null;
+    }
     try {
-      var ordered = queuePlayers.slice(0, REQUIRED_PLAYERS).sort(function (a, b) {
-        return String(a.id || '').localeCompare(String(b.id || ''));
-      });
+      var ordered = selectMatchPlayers(queuePlayers);
       var game = {
         id: 'zombie-game-' + now(),
         status: 'active',
         createdAt: now(),
+        seasonKey: normalizedSeason,
+        seasonLabel: MAP_LABELS[normalizedSeason] || 'Invierno',
         players: ordered.map(function (player, index) {
           var spawn = CORNER_SPAWNS[index % CORNER_SPAWNS.length];
           return {
@@ -150,7 +262,10 @@
       releaseGameCreationLock(token);
     }
   }
-  function prepareMatchmaking() { getRoom(); }
+  function prepareMatchmaking() {
+    getRoom();
+    // No limpiar aquí; la votación activa se define por token de jugadores.
+  }
   function updateGamePlayer(transform) {
     var game = getGame();
     var playerId = getSessionId();
@@ -184,6 +299,7 @@
   }
 
   window.PintaGolZombieStore = {
+    MAP_VOTE_KEY: MAP_VOTE_KEY,
     ROOM_KEY: ROOM_KEY,
     GAME_KEY: GAME_KEY,
     REQUIRED_PLAYERS: REQUIRED_PLAYERS,
@@ -193,6 +309,11 @@
     upsertRoomPlayer: upsertRoomPlayer,
     removeRoomPlayer: removeRoomPlayer,
     createGameIfReady: createGameIfReady,
+    ensureMapVote: ensureMapVote,
+    getMapVoteState: getMapVoteState,
+    castMapVote: castMapVote,
+    resolveMapVote: resolveMapVote,
+    removeMapVoteForLocalPlayer: removeMapVoteForLocalPlayer,
     getGame: getGame,
     prepareMatchmaking: prepareMatchmaking,
     updateGamePlayer: updateGamePlayer,

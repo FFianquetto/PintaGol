@@ -3,6 +3,7 @@
 
   var ROOM_KEY = 'pintagol_matchmaking_room';
   var GAME_KEY = 'pintagol_active_game';
+  var MAP_VOTE_KEY = 'pintagol_map_vote';
   var GAME_LOCK_KEY = 'pintagol_game_lock';
   var SESSION_KEY = 'pintagol_session_id';
   var CHANNEL_KEY = 'pintagol_matchmaking_channel';
@@ -52,6 +53,11 @@
     { x: -4.5, z: -1.5, rotationY: Math.PI / 4 },        // --
     { x: 4.5, z: 1.5, rotationY: (-3 * Math.PI) / 4 }    // ++
   ];
+  var MAP_LABELS = {
+    invierno: 'Invierno',
+    primavera: 'Primavera',
+    otono: 'Otono'
+  };
 
   function now() {
     return Date.now();
@@ -125,6 +131,115 @@
     });
   }
 
+  function selectMatchPlayers(players) {
+    return (players || [])
+      .slice()
+      .sort(function (a, b) {
+        return String(a && a.id || '').localeCompare(String(b && b.id || ''));
+      })
+      .slice(0, REQUIRED_PLAYERS);
+  }
+
+  function normalizeSeasonKey(raw) {
+    var key = String(raw || '').toLowerCase();
+    if (key === 'invierno' || key === 'primavera' || key === 'otono') return key;
+    return '';
+  }
+
+  function getVoteToken(players) {
+    var ids = selectMatchPlayers(players)
+      .map(function (player) { return String(player && player.id || ''); })
+      .filter(Boolean)
+    if (ids.length < REQUIRED_PLAYERS) return '';
+    return ids.join('|');
+  }
+
+  function ensureMapVote(players) {
+    var token = getVoteToken(players);
+    if (!token) return null;
+    var current = readJSON(MAP_VOTE_KEY, null);
+    if (current && current.token === token) return current;
+    var next = {
+      token: token,
+      createdAt: now(),
+      votes: {},
+      resolvedSeasonKey: '',
+      resolvedSeasonLabel: '',
+      resolvedAt: 0
+    };
+    writeJSON(MAP_VOTE_KEY, next);
+    notifyChange('map-vote');
+    return next;
+  }
+
+  function getMapVoteState() {
+    return readJSON(MAP_VOTE_KEY, null);
+  }
+
+  function castMapVote(players, seasonKey) {
+    var normalized = normalizeSeasonKey(seasonKey);
+    if (!normalized) return null;
+    var state = ensureMapVote(players);
+    if (!state) return null;
+    if (state.resolvedSeasonKey) return state;
+    state.votes = state.votes || {};
+    var sessionId = getSessionId();
+    if (state.votes[sessionId]) {
+      // Voto unico por jugador: no se puede cambiar ni votar dos veces.
+      return state;
+    }
+    state.votes[sessionId] = normalized;
+    writeJSON(MAP_VOTE_KEY, state);
+    notifyChange('map-vote');
+    return state;
+  }
+
+  function removeMapVoteForLocalPlayer() {
+    var state = getMapVoteState();
+    if (!state || !state.votes) return;
+    var playerId = getSessionId();
+    if (!state.votes[playerId]) return;
+    delete state.votes[playerId];
+    writeJSON(MAP_VOTE_KEY, state);
+    notifyChange('map-vote');
+  }
+
+  function resolveMapVote(players) {
+    var token = getVoteToken(players);
+    if (!token) return null;
+    var state = ensureMapVote(players);
+    if (!state) return null;
+    if (state.resolvedSeasonKey) return state;
+
+    var eligibleIds = token.split('|');
+    var votesBySeason = { invierno: 0, primavera: 0, otono: 0 };
+    var validVotes = 0;
+    for (var i = 0; i < eligibleIds.length; i++) {
+      var vote = normalizeSeasonKey(state.votes && state.votes[eligibleIds[i]]);
+      if (!vote) continue;
+      votesBySeason[vote] += 1;
+      validVotes += 1;
+    }
+    if (validVotes < REQUIRED_PLAYERS) return state;
+
+    var keys = ['invierno', 'primavera', 'otono'];
+    var maxVotes = Math.max(votesBySeason.invierno, votesBySeason.primavera, votesBySeason.otono);
+    var leaders = keys.filter(function (key) { return votesBySeason[key] === maxVotes; });
+    // Desempate pseudoaleatorio pero determinístico para todos los clientes.
+    var seedSource = String(state.token || '') + '|' + String(state.createdAt || 0);
+    var seed = 0;
+    for (var si = 0; si < seedSource.length; si++) {
+      seed = (seed * 31 + seedSource.charCodeAt(si)) >>> 0;
+    }
+    var winner = leaders[leaders.length ? seed % leaders.length : 0] || 'invierno';
+    state.resolvedSeasonKey = winner;
+    state.resolvedSeasonLabel = MAP_LABELS[winner] || 'Invierno';
+    state.resolvedAt = now();
+    writeJSON(MAP_VOTE_KEY, state);
+    notifyChange('map-vote');
+    return state;
+  }
+
   function saveRoom(room) {
     room.players = prunePlayers(room.players);
     writeJSON(ROOM_KEY, room);
@@ -145,6 +260,8 @@
         name: playerData.name || player.name || 'Jugador',
         country: playerData.country || player.country || '',
         countryLabel: playerData.countryLabel || player.countryLabel || '',
+        seasonKey: playerData.seasonKey || player.seasonKey || '',
+        seasonLabel: playerData.seasonLabel || player.seasonLabel || '',
         status: playerData.status || player.status || 'waiting',
         lastSeen: now()
       };
@@ -156,6 +273,8 @@
         name: playerData.name || 'Jugador',
         country: playerData.country || '',
         countryLabel: playerData.countryLabel || '',
+        seasonKey: playerData.seasonKey || '',
+        seasonLabel: playerData.seasonLabel || '',
         status: playerData.status || 'waiting',
         lastSeen: now()
       });
@@ -174,7 +293,11 @@
     saveRoom(room);
   }
 
-  function createGameIfReady() {
+  function createGameIfReady(options) {
+    var opts = options || {};
+    var normalizedSeason = normalizeSeasonKey(opts.seasonKey);
+    // Blindaje: nunca crear partida sin mapa resuelto por votacion.
+    if (!normalizedSeason) return null;
     var room = getRoom();
     var queuePlayers = getQueuePlayers(room);
     if (queuePlayers.length < REQUIRED_PLAYERS) return null;
@@ -186,8 +309,16 @@
         window.localStorage.removeItem(GAME_KEY);
         notifyChange('game');
       } else {
-        // Si ya existe una partida activa vigente, se reutiliza para evitar sobrescrituras.
+        // Reutilizar solo si coincide con la estación votada actual.
         if (activeGame.players.length >= REQUIRED_PLAYERS) {
+          var activeSeason = normalizeSeasonKey(activeGame.seasonKey);
+          if (activeSeason === normalizedSeason) {
+            return activeGame;
+          }
+          // Si la estación cambió por una nueva votación, forzar recreación.
+          window.localStorage.removeItem(GAME_KEY);
+          notifyChange('game');
+        } else {
           return activeGame;
         }
       }
@@ -204,20 +335,23 @@
       // Releer después de adquirir lock para evitar carreras.
       activeGame = readJSON(GAME_KEY, null);
       if (activeGame && activeGame.status === 'active' && Array.isArray(activeGame.players) && activeGame.players.length >= REQUIRED_PLAYERS) {
-        return activeGame;
+        var activeSeasonAfterLock = normalizeSeasonKey(activeGame.seasonKey);
+        if (activeSeasonAfterLock === normalizedSeason) {
+          return activeGame;
+        }
+        window.localStorage.removeItem(GAME_KEY);
+        notifyChange('game');
       }
 
-      var orderedPlayers = queuePlayers
-        .slice(0, REQUIRED_PLAYERS)
-        .sort(function (a, b) {
-          return String(a && a.id || '').localeCompare(String(b && b.id || ''));
-        });
+      var orderedPlayers = selectMatchPlayers(queuePlayers);
 
       var game = {
         id: 'game-' + now(),
         status: 'active',
         createdAt: now(),
         endsAt: null,
+        seasonKey: normalizedSeason,
+        seasonLabel: MAP_LABELS[normalizedSeason] || 'Invierno',
         players: orderedPlayers.map(function (player, index) {
           var spawn = CORNER_SPAWNS[index % CORNER_SPAWNS.length];
           return {
@@ -286,6 +420,7 @@
   function prepareMatchmaking() {
     clearFinishedGame();
     getRoom();
+    // No limpiar MAP_VOTE aquí para no reiniciar votos cuando entra otro cliente.
   }
 
   function getRemainingGameMs(game) {
@@ -338,6 +473,7 @@
   }
 
   window.PintaGolMultiplayerStore = {
+    MAP_VOTE_KEY: MAP_VOTE_KEY,
     ROOM_KEY: ROOM_KEY,
     GAME_KEY: GAME_KEY,
     REQUIRED_PLAYERS: REQUIRED_PLAYERS,
@@ -348,6 +484,11 @@
     upsertRoomPlayer: upsertRoomPlayer,
     removeRoomPlayer: removeRoomPlayer,
     createGameIfReady: createGameIfReady,
+    ensureMapVote: ensureMapVote,
+    getMapVoteState: getMapVoteState,
+    castMapVote: castMapVote,
+    resolveMapVote: resolveMapVote,
+    removeMapVoteForLocalPlayer: removeMapVoteForLocalPlayer,
     getGame: getGame,
     clearFinishedGame: clearFinishedGame,
     prepareMatchmaking: prepareMatchmaking,
