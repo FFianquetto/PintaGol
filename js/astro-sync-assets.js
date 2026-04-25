@@ -65,7 +65,8 @@ export function configureGunMaterials(object, texture) {
 }
 
 export function setupGunMesh(gun, gunTex, worldScale, position, options = {}) {
-  const { scale = 0.012, rotationX = 0.08, rotationY = Math.PI / 2, rotationZ = -0.22 } = options;
+  // Fallback alineado al subfusil (gun2) para evitar rotaciones genéricas.
+  const { scale = 0.012, rotationX = Math.PI / 4.5, rotationY = -1.8, rotationZ = 0 } = options;
   configureGunMaterials(gun, gunTex);
   gun.scale.setScalar(scale * worldScale);
   gun.rotation.set(rotationX, rotationY, rotationZ);

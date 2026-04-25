@@ -146,6 +146,7 @@ let localPlayerColor = PLAYER_COLORS[0];
 const QUERY_PARAMS = new URLSearchParams(window.location.search);
 const INITIAL_WEAPON_QUERY = (QUERY_PARAMS.get("countryKey") || "").toLowerCase();
 const CURRENT_GAME_ID = QUERY_PARAMS.get("game") || "";
+const LOCAL_WEAPON_STATE_KEY = `pintagol_astro_weapon_${CURRENT_GAME_ID || "nogame"}_${LOCAL_PLAYER_NAME || LOCAL_PLAYER_ID || "anon"}`;
 const SELECTED_SEASON_KEY = resolveSeasonKey();
 let pendingInitialWeaponType = null;
 
@@ -386,6 +387,25 @@ function playShotgunShotSfx() {
 
 function setWeaponType(nextWeaponType) {
   localWeaponType = normalizedWeaponType(nextWeaponType);
+  persistLocalCombatState();
+}
+
+function persistLocalWeaponType() {
+  try {
+    window.sessionStorage.setItem(LOCAL_WEAPON_STATE_KEY, localWeaponType);
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function loadPersistedLocalWeaponType() {
+  try {
+    const raw = window.sessionStorage.getItem(LOCAL_WEAPON_STATE_KEY);
+    if (!raw || typeof raw !== "string") return null;
+    return normalizedWeaponType(raw);
+  } catch (_err) {
+    return null;
+  }
 }
 
 function normalizedWeaponType(raw) {
@@ -772,9 +792,11 @@ function persistLocalCombatState() {
         hits: localHits,
         defeated: localDefeated,
         damageSeq: localDamageSeq,
-        lastHitColorHex: localLastHitColorHex
+        lastHitColorHex: localLastHitColorHex,
+        weaponType: localWeaponType
       })
     );
+    persistLocalWeaponType();
   } catch (_err) {
     /* no-op */
   }
@@ -790,7 +812,8 @@ function loadPersistedLocalCombatState() {
     const defeated = !!parsed.defeated || hits >= MAX_HITS;
     const damageSeq = Math.max(0, Math.floor(Number(parsed.damageSeq) || 0));
     const lastHitColorHex = typeof parsed.lastHitColorHex === "number" ? parsed.lastHitColorHex : 0xffffff;
-    return { hits, defeated, damageSeq, lastHitColorHex };
+    const weaponType = normalizedWeaponType(parsed.weaponType);
+    return { hits, defeated, damageSeq, lastHitColorHex, weaponType };
   } catch (_err) {
     return null;
   }
@@ -1976,7 +1999,7 @@ function placeInScene(astroGroup, gun2) {
   localDamageSeq = 0;
   localShotSeq = 0;
   localLastHitColorHex = 0xffffff;
-  localWeaponType = normalizedWeaponType(INITIAL_WEAPON_QUERY || "gun2");
+  localWeaponType = "gun2";
   hasPickedGun3 = false;
   hasPickedShotgun = false;
   gun3PickupAvailable = true;
@@ -1994,6 +2017,14 @@ function placeInScene(astroGroup, gun2) {
     localDefeated = persistedState.defeated;
     localDamageSeq = Math.max(localDamageSeq, persistedState.damageSeq);
     localLastHitColorHex = persistedState.lastHitColorHex;
+    localWeaponType = normalizedWeaponType(persistedState.weaponType || localWeaponType);
+  }
+  const persistedWeaponType = loadPersistedLocalWeaponType();
+  if (persistedWeaponType) {
+    localWeaponType = persistedWeaponType;
+  }
+  if ((!persistedState || !persistedState.weaponType) && !persistedWeaponType) {
+    localWeaponType = normalizedWeaponType(INITIAL_WEAPON_QUERY || localWeaponType || "gun2");
   }
   setPlayerEliminatedVisual(astroRoot, false);
   setDefeatOverlayVisible(false);

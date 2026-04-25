@@ -9,8 +9,17 @@ export const WORLD_GROUP_SCALE = 0.52;
 
 export const GUN_NUDGE = 0.028;
 
-/** Offset inicial en el rig del astronauta; CVBN ajusta x/z/y (mismo origen para las tres armas). */
-export const GUN_HAND_OFFSET_DEFAULT = Object.freeze({ x: -0.55, y: 2.99, z: 1.8 });
+/** Offset inicial en el rig del astronauta para subfusil (gun2). */
+export const GUN2_HAND_OFFSET_DEFAULT = Object.freeze({ x: -0.2, y: 2.99, z: 3.3 });
+
+/** Compatibilidad: default histórico apunta al subfusil. */
+export const GUN_HAND_OFFSET_DEFAULT = GUN2_HAND_OFFSET_DEFAULT;
+
+/** Offset inicial en el rig del astronauta para pistola (gun3). */
+export const GUN3_HAND_OFFSET_DEFAULT = Object.freeze({ x: 1.3, y: 2.99, z: 3.3 });
+
+/** Offset inicial en el rig del astronauta para escopeta (shotgun/gun4). */
+export const SHOTGUN_HAND_OFFSET_DEFAULT = Object.freeze({ x: 1.9, y: 2.99, z: 3.3 });
 
 /** Subfusil (gun2) */
 export const GUN2_BASE_ROTATION = Object.freeze({
@@ -58,4 +67,19 @@ export function weaponRotationForType(weaponType) {
     return GUN3_BASE_ROTATION;
   }
   return GUN2_BASE_ROTATION;
+}
+
+/**
+ * Offset base en mano según tipo de arma.
+ * @param {string} [weaponType] — "gun2" | "gun3" | "shotgun" | "gun4" (escopeta)
+ */
+export function weaponHandOffsetForType(weaponType) {
+  const wt = typeof weaponType === "string" ? weaponType : "gun2";
+  if (wt === "shotgun" || wt === "gun4") {
+    return SHOTGUN_HAND_OFFSET_DEFAULT;
+  }
+  if (wt === "gun3") {
+    return GUN3_HAND_OFFSET_DEFAULT;
+  }
+  return GUN2_HAND_OFFSET_DEFAULT;
 }

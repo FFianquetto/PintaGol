@@ -1,3 +1,5 @@
+import { GUN2_BASE_ROTATION } from "./weapon-tuning.js";
+
 export function gunSetupOptions(scale, rotation) {
   return { scale, ...rotation };
 }
@@ -17,9 +19,10 @@ export function clampGun2LocalOffset(gun2World) {
 
 function applyGun2Transform(gun2Root, gun2World, t, baseRotation) {
   if (!gun2Root || !gun2World) return;
-  const baseX = baseRotation?.rotationX ?? 0;
-  const baseY = baseRotation?.rotationY ?? 0;
-  const baseZ = baseRotation?.rotationZ ?? 0;
+  const resolvedBaseRotation = baseRotation || GUN2_BASE_ROTATION;
+  const baseX = resolvedBaseRotation.rotationX;
+  const baseY = resolvedBaseRotation.rotationY;
+  const baseZ = resolvedBaseRotation.rotationZ;
   const bob2 = Math.cos(t * 8 + 1.1) * 0.008;
   gun2Root.rotation.set(baseX, baseY, baseZ + Math.sin(t * 8 + 1.1) * 0.02);
   gun2Root.position.set(gun2World.x, gun2World.y + bob2, gun2World.z);
