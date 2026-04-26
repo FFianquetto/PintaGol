@@ -68,6 +68,15 @@ html, body {
   font-weight: 600;
   color: #e2e8f0;
 }
+#astro-effect-timer {
+  font-weight: 700;
+  color: #fde68a;
+  font-size: 1rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.58);
+  border: 1px solid rgba(253, 224, 71, 0.4);
+}
 #astro-status.ok { color: #86efac; }
 #astro-status.err { color: #fca5a5; }
 
