@@ -157,7 +157,7 @@ html, body {
 #btn-volver {
   display: block;
   width: 100%;
-  margin-top: 1.5rem;
+  margin-top: 0.8rem;
   padding: 0.65rem 1rem;
   font-family: inherit;
   font-size: 0.95rem;
@@ -178,5 +178,31 @@ html, body {
 }
 
 #btn-volver:active {
+  transform: scale(0.98);
+}
+
+#btn-confirmar-silencio {
+  display: block;
+  width: 100%;
+  margin-top: 1.35rem;
+  padding: 0.65rem 1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 14px rgba(2, 6, 23, 0.45);
+}
+
+#btn-confirmar-silencio:hover {
+  transform: scale(1.02);
+  filter: brightness(1.08);
+}
+
+#btn-confirmar-silencio:active {
   transform: scale(0.98);
 }

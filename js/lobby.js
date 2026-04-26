@@ -173,9 +173,6 @@
   function onLobbyButtonClick(ev) {
     var action = (ev.currentTarget && ev.currentTarget.getAttribute('data-action')) || '';
     switch (action) {
-      case 'crear-partida':
-        window.location.href = 'pausa.html';
-        break;
       case 'buscar-partida':
         window.location.href = 'modo-partida.html';
         break;

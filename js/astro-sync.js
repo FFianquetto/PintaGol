@@ -98,7 +98,13 @@ const SHOTGUN_DAMAGE_MULTIPLIER = 4;
 const GUN1_SHOT_SFX_URL = "assets/sfx/items/sub.mp3";
 const GUN3_SHOT_SFX_URL = "assets/sfx/items/pistol.mp3";
 const SHOTGUN_SHOT_SFX_URL = "assets/sfx/items/shotgun.mp3";
+const ITEM_PICKUP_SFX_URL = "assets/sfx/items/item.mp3";
 const GUN1_SHOT_POOL_SIZE = 4;
+const ITEM_PICKUP_POOL_SIZE = 4;
+const AUDIO_SFX_KEY = "pintagol_audio_sfx_volume";
+const AUDIO_MUSIC_KEY = "pintagol_audio_music_volume";
+const DEFAULT_SFX_VOLUME_PERCENT = 72;
+const DEFAULT_MUSIC_VOLUME_PERCENT = 72;
 const PLAYER_COLORS = [0x3b82f6, 0xffffff, 0x22c55e, 0xeab308];
 const MAX_HITS = 20;
 const STAIN_DURATION_MS = 5000;
@@ -151,6 +157,12 @@ const defeatTextEl = document.getElementById("astro-defeat-text");
 const watchMatchBtn = document.getElementById("astro-btn-watch");
 const goMenuBtn = document.getElementById("astro-btn-menu");
 const spectatorIndicatorEl = document.getElementById("astro-spectator-indicator");
+const audioOverlayEl = document.getElementById("astro-audio-overlay");
+const audioSfxSliderEl = document.getElementById("astro-slider-sonido");
+const audioMusicSliderEl = document.getElementById("astro-slider-musica");
+const audioConfirmMuteBtn = document.getElementById("astro-btn-confirmar-silencio");
+const audioCloseMenuBtn = document.getElementById("astro-btn-cerrar-menu");
+const audioExitLobbyBtn = document.getElementById("astro-btn-salir-lobby");
 const LOCAL_PLAYER_NAME = resolveLocalPlayerName();
 const LOCAL_PLAYER_ID = resolveLocalPlayerId(LOCAL_PLAYER_NAME);
 const LOCAL_PLAYER_LABEL = LOCAL_PLAYER_NAME || "Jugador";
@@ -367,6 +379,7 @@ let spectatorMode = false;
 let localDamageSeq = 0;
 let localShotSeq = 0;
 let localLastHitColorHex = 0xffffff;
+let isPauseMenuOpen = false;
 const remotePlayers = new Map();
 const remotePlayersLoading = new Set();
 const seenRemoteShotIds = new Set();
@@ -375,9 +388,51 @@ const clock = new THREE.Clock();
 const gun1ShotSfxPool = [];
 const gun3ShotSfxPool = [];
 const shotgunShotSfxPool = [];
+const itemPickupSfxPool = [];
 let gun1ShotSfxIndex = 0;
 let gun3ShotSfxIndex = 0;
 let shotgunShotSfxIndex = 0;
+let itemPickupSfxIndex = 0;
+
+function clampVolumePercent(value, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function getSfxVolume() {
+  try {
+    const raw = window.localStorage.getItem(AUDIO_SFX_KEY);
+    const percent = raw == null ? DEFAULT_SFX_VOLUME_PERCENT : clampVolumePercent(raw, DEFAULT_SFX_VOLUME_PERCENT);
+    return percent / 100;
+  } catch (_err) {
+    return DEFAULT_SFX_VOLUME_PERCENT / 100;
+  }
+}
+
+function getMusicVolume() {
+  try {
+    const raw = window.localStorage.getItem(AUDIO_MUSIC_KEY);
+    const percent = raw == null ? DEFAULT_MUSIC_VOLUME_PERCENT : clampVolumePercent(raw, DEFAULT_MUSIC_VOLUME_PERCENT);
+    return percent / 100;
+  } catch (_err) {
+    return DEFAULT_MUSIC_VOLUME_PERCENT / 100;
+  }
+}
+
+function setStoredVolumePercent(key, value) {
+  try {
+    window.localStorage.setItem(key, String(clampVolumePercent(value, 0)));
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function applyMusicVolumeToCurrentPage() {
+  const bgm = document.getElementById("pintagol-bgm");
+  if (!bgm) return;
+  bgm.volume = getMusicVolume();
+}
 
 function shortestAngleDelta(from, to) {
   const TAU = Math.PI * 2;
@@ -388,31 +443,45 @@ function shortestAngleDelta(from, to) {
 
 function initGun1ShotSfx() {
   if (gun1ShotSfxPool.length) return;
+  const volume = Math.min(1, getSfxVolume() * 0.58);
   for (let i = 0; i < GUN1_SHOT_POOL_SIZE; i += 1) {
     const a = new Audio(GUN1_SHOT_SFX_URL);
     a.preload = "auto";
-    a.volume = 0.42;
+    a.volume = volume;
     gun1ShotSfxPool.push(a);
   }
 }
 
 function initGun3ShotSfx() {
   if (gun3ShotSfxPool.length) return;
+  const volume = Math.min(1, getSfxVolume() * 0.61);
   for (let i = 0; i < GUN1_SHOT_POOL_SIZE; i += 1) {
     const a = new Audio(GUN3_SHOT_SFX_URL);
     a.preload = "auto";
-    a.volume = 0.44;
+    a.volume = volume;
     gun3ShotSfxPool.push(a);
   }
 }
 
 function initShotgunShotSfx() {
   if (shotgunShotSfxPool.length) return;
+  const volume = Math.min(1, getSfxVolume() * 0.64);
   for (let i = 0; i < GUN1_SHOT_POOL_SIZE; i += 1) {
     const a = new Audio(SHOTGUN_SHOT_SFX_URL);
     a.preload = "auto";
-    a.volume = 0.46;
+    a.volume = volume;
     shotgunShotSfxPool.push(a);
+  }
+}
+
+function initItemPickupSfx() {
+  if (itemPickupSfxPool.length) return;
+  const volume = Math.min(1, getSfxVolume() * 0.72);
+  for (let i = 0; i < ITEM_PICKUP_POOL_SIZE; i += 1) {
+    const a = new Audio(ITEM_PICKUP_SFX_URL);
+    a.preload = "auto";
+    a.volume = volume;
+    itemPickupSfxPool.push(a);
   }
 }
 
@@ -422,6 +491,7 @@ function playGun1ShotSfx() {
   gun1ShotSfxIndex = (gun1ShotSfxIndex + 1) % gun1ShotSfxPool.length;
   if (!a) return;
   try {
+    a.volume = Math.min(1, getSfxVolume() * 0.58);
     a.currentTime = 0;
     const playPromise = a.play();
     if (playPromise && typeof playPromise.catch === "function") {
@@ -440,6 +510,7 @@ function playGun3ShotSfx() {
   gun3ShotSfxIndex = (gun3ShotSfxIndex + 1) % gun3ShotSfxPool.length;
   if (!a) return;
   try {
+    a.volume = Math.min(1, getSfxVolume() * 0.61);
     a.currentTime = 0;
     const playPromise = a.play();
     if (playPromise && typeof playPromise.catch === "function") {
@@ -458,6 +529,26 @@ function playShotgunShotSfx() {
   shotgunShotSfxIndex = (shotgunShotSfxIndex + 1) % shotgunShotSfxPool.length;
   if (!a) return;
   try {
+    a.volume = Math.min(1, getSfxVolume() * 0.64);
+    a.currentTime = 0;
+    const playPromise = a.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        /* ignore autoplay/transient audio errors */
+      });
+    }
+  } catch (_err) {
+    /* no-op */
+  }
+}
+
+function playItemPickupSfx() {
+  if (!itemPickupSfxPool.length) return;
+  const a = itemPickupSfxPool[itemPickupSfxIndex];
+  itemPickupSfxIndex = (itemPickupSfxIndex + 1) % itemPickupSfxPool.length;
+  if (!a) return;
+  try {
+    a.volume = Math.min(1, getSfxVolume() * 0.72);
     a.currentTime = 0;
     const playPromise = a.play();
     if (playPromise && typeof playPromise.catch === "function") {
@@ -685,6 +776,7 @@ function tryConsumeMedkitLocal() {
   const dz = astroRoot.position.z - medkitPickup.position.z;
   if (dx * dx + dz * dz > MEDKIT_PICKUP_RADIUS * MEDKIT_PICKUP_RADIUS) return;
   applyMedkitPickupState(false, LOCAL_PLAYER_ID);
+  playItemPickupSfx();
   const healed = applyHealToLocalPlayer(MEDKIT_HEAL_AMOUNT);
   sendSyncMessage({
     tipo: "medkitState",
@@ -709,6 +801,7 @@ function tryConsumeDrinkLocal() {
   const dz = astroRoot.position.z - drinkPickup.position.z;
   if (dx * dx + dz * dz > DRINK_PICKUP_RADIUS * DRINK_PICKUP_RADIUS) return;
   applyDrinkPickupState(false, LOCAL_PLAYER_ID);
+  playItemPickupSfx();
   applySpeedBoostToLocalPlayer();
   sendSyncMessage({
     tipo: "drinkState",
@@ -723,6 +816,7 @@ function tryConsumeStarLocal() {
   const dz = astroRoot.position.z - starPickup.position.z;
   if (dx * dx + dz * dz > STAR_PICKUP_RADIUS * STAR_PICKUP_RADIUS) return;
   applyStarPickupState(false, LOCAL_PLAYER_ID);
+  playItemPickupSfx();
   applyImmunityToLocalPlayer();
   sendSyncMessage({
     tipo: "starState",
@@ -737,6 +831,7 @@ function tryConsumeBombLocal() {
   const dz = astroRoot.position.z - bombPickup.position.z;
   if (dx * dx + dz * dz > BOMB_PICKUP_RADIUS * BOMB_PICKUP_RADIUS) return;
   applyBombPickupState(false, LOCAL_PLAYER_ID);
+  playItemPickupSfx();
   applyDamageBoostToLocalPlayer();
   sendSyncMessage({
     tipo: "bombState",
@@ -1511,11 +1606,85 @@ function handleRemoteHit(d) {
   });
 }
 
+function resetGameplayInputs() {
+  keys.w = keys.a = keys.s = keys.d = false;
+  keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;
+  fireQueued = false;
+  setAimMode(false);
+}
+
+function syncAudioMenuFromStorage() {
+  if (audioSfxSliderEl) {
+    audioSfxSliderEl.value = String(clampVolumePercent(getSfxVolume() * 100, DEFAULT_SFX_VOLUME_PERCENT));
+  }
+  if (audioMusicSliderEl) {
+    audioMusicSliderEl.value = String(clampVolumePercent(getMusicVolume() * 100, DEFAULT_MUSIC_VOLUME_PERCENT));
+  }
+}
+
+function applyAudioMenuValues() {
+  const sfxPercent = audioSfxSliderEl ? clampVolumePercent(audioSfxSliderEl.value, DEFAULT_SFX_VOLUME_PERCENT) : DEFAULT_SFX_VOLUME_PERCENT;
+  const musicPercent = audioMusicSliderEl
+    ? clampVolumePercent(audioMusicSliderEl.value, DEFAULT_MUSIC_VOLUME_PERCENT)
+    : DEFAULT_MUSIC_VOLUME_PERCENT;
+  setStoredVolumePercent(AUDIO_SFX_KEY, sfxPercent);
+  setStoredVolumePercent(AUDIO_MUSIC_KEY, musicPercent);
+  applyMusicVolumeToCurrentPage();
+}
+
+function setPauseMenuVisible(visible) {
+  isPauseMenuOpen = !!visible;
+  if (audioOverlayEl) audioOverlayEl.hidden = !isPauseMenuOpen;
+  if (isPauseMenuOpen) {
+    resetGameplayInputs();
+    syncAudioMenuFromStorage();
+    if (document.pointerLockElement === canvas) {
+      document.exitPointerLock?.();
+    }
+  } else if (canvas) {
+    canvas.focus({ preventScroll: true });
+  }
+}
+
+function bindAudioPauseMenu() {
+  syncAudioMenuFromStorage();
+  if (audioSfxSliderEl) {
+    audioSfxSliderEl.addEventListener("input", applyAudioMenuValues);
+  }
+  if (audioMusicSliderEl) {
+    audioMusicSliderEl.addEventListener("input", applyAudioMenuValues);
+  }
+  if (audioConfirmMuteBtn) {
+    audioConfirmMuteBtn.addEventListener("click", () => {
+      if (audioSfxSliderEl) audioSfxSliderEl.value = "0";
+      if (audioMusicSliderEl) audioMusicSliderEl.value = "0";
+      applyAudioMenuValues();
+      setStatus("Audio silenciado para esta y siguientes partidas.", true);
+    });
+  }
+  if (audioCloseMenuBtn) {
+    audioCloseMenuBtn.addEventListener("click", () => {
+      setPauseMenuVisible(false);
+    });
+  }
+  if (audioExitLobbyBtn) {
+    audioExitLobbyBtn.addEventListener("click", () => {
+      window.location.href = "index.html";
+    });
+  }
+}
+
 function bindKeys() {
   window.addEventListener(
     "keydown",
     (e) => {
       const c = e.code;
+      if (c === "KeyP") {
+        setPauseMenuVisible(!isPauseMenuOpen);
+        e.preventDefault();
+        return;
+      }
+      if (isPauseMenuOpen) return;
       if (c === "KeyW" || c === "ArrowUp") {
         keys.w = true;
         e.preventDefault();
@@ -1555,6 +1724,7 @@ function bindKeys() {
     "keyup",
     (e) => {
       const c = e.code;
+      if (isPauseMenuOpen) return;
       if (c === "KeyW" || c === "ArrowUp") keys.w = false;
       if (c === "KeyS" || c === "ArrowDown") keys.s = false;
       if (c === "KeyA" || c === "ArrowLeft") keys.a = false;
@@ -1567,16 +1737,14 @@ function bindKeys() {
     true
   );
   window.addEventListener("blur", () => {
-    keys.w = keys.a = keys.s = keys.d = false;
-    keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;
-    fireQueued = false;
-    setAimMode(false);
+    resetGameplayInputs();
   });
 }
 
 function bindMouseLook() {
   if (!canvas) return;
   canvas.addEventListener("click", () => {
+    if (isPauseMenuOpen) return;
     if (document.pointerLockElement !== canvas) {
       canvas.requestPointerLock?.();
     }
@@ -1598,6 +1766,7 @@ function bindMouseLook() {
     { passive: false }
   );
   canvas.addEventListener("mousedown", (e) => {
+    if (isPauseMenuOpen) return;
     if (e.button === 0) {
       fireQueued = true;
       return;
@@ -1622,7 +1791,7 @@ function bindMouseLook() {
 }
 
 function shootIfReady(nowMs) {
-  if (!fireQueued || !astroRoot || !bulletTemplate || localDefeated) return;
+  if (isPauseMenuOpen || !fireQueued || !astroRoot || !bulletTemplate || localDefeated) return;
   const shotCooldownMs = weaponCooldownForType(localWeaponType);
   if (nowMs - lastShotAt < shotCooldownMs) return;
   const shotDamage = weaponDamageForType(localWeaponType);
@@ -2578,9 +2747,12 @@ function placeInScene(astroGroup, gun2) {
 bindKeys();
 bindMouseLook();
 bindDefeatActions();
+bindAudioPauseMenu();
+applyMusicVolumeToCurrentPage();
 initGun1ShotSfx();
 initGun3ShotSfx();
 initShotgunShotSfx();
+initItemPickupSfx();
 if (canvas) {
   canvas.addEventListener("click", () => canvas.focus({ preventScroll: true }));
 }

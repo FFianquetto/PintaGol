@@ -22,10 +22,28 @@
   <div id="astro-hud">
     <span id="astro-player-name" class="astro-player-name" aria-live="polite"></span>
     <span id="astro-spectator-indicator" class="astro-spectator-indicator" hidden>Modo espectador: viendo partida</span>
-    <span id="astro-hint">WASD: astronauta · CVBN: arma 2 · clic izquierdo: disparar bala</span>
+    <span id="astro-hint">WASD: astronauta · CVBN: arma 2 · clic izquierdo: disparar bala · P: menú</span>
     <span id="estado-red" aria-live="polite"></span>
     <span id="astro-effect-timer" aria-live="polite"></span>
     <span id="astro-status"></span>
+  </div>
+  <div id="astro-audio-overlay" hidden>
+    <div class="astro-audio-card">
+      <h3>Configuración rápida</h3>
+      <div class="astro-audio-row">
+        <label for="astro-slider-sonido">Sonido</label>
+        <input type="range" id="astro-slider-sonido" min="0" max="100" value="72">
+      </div>
+      <div class="astro-audio-row">
+        <label for="astro-slider-musica">Música</label>
+        <input type="range" id="astro-slider-musica" min="0" max="100" value="72">
+      </div>
+      <div class="astro-audio-actions">
+        <button type="button" id="astro-btn-confirmar-silencio">Confirmar silencio total</button>
+        <button type="button" id="astro-btn-salir-lobby">Salir de la partida</button>
+        <button type="button" id="astro-btn-cerrar-menu">Cerrar (P)</button>
+      </div>
+    </div>
   </div>
   <div id="astro-defeat-overlay" aria-live="polite" hidden>
     <div class="astro-defeat-card">

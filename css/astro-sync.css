@@ -80,6 +80,82 @@ html, body {
 #astro-status.ok { color: #86efac; }
 #astro-status.err { color: #fca5a5; }
 
+#astro-audio-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.62);
+}
+
+#astro-audio-overlay[hidden] {
+  display: none;
+}
+
+.astro-audio-card {
+  width: min(420px, 92vw);
+  background: linear-gradient(165deg, #1e3a5f 0%, #0f2744 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  padding: 1rem 1rem 1.1rem;
+  color: #e2e8f0;
+}
+
+.astro-audio-card h3 {
+  margin-bottom: 0.9rem;
+  text-align: center;
+  font-size: 1.2rem;
+  color: #86efac;
+}
+
+.astro-audio-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+
+.astro-audio-row label {
+  font-weight: 600;
+}
+
+.astro-audio-row input[type="range"] {
+  width: 100%;
+  accent-color: #22c55e;
+}
+
+.astro-audio-actions {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.astro-audio-actions button {
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#astro-btn-confirmar-silencio {
+  color: #f8fafc;
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+}
+
+#astro-btn-salir-lobby {
+  color: #0c1222;
+  background: linear-gradient(180deg, #fde047 0%, #eab308 100%);
+}
+
+#astro-btn-cerrar-menu {
+  color: #ffffff;
+  background: linear-gradient(180deg, #0ea5e9 0%, #0369a1 100%);
+}
+
 #astro-defeat-overlay {
   position: absolute;
   inset: 0;

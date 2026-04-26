@@ -6,6 +6,41 @@
   'use strict';
 
   var scene, camera, renderer, mapPlane;
+  var AUDIO_SFX_KEY = 'pintagol_audio_sfx_volume';
+  var AUDIO_MUSIC_KEY = 'pintagol_audio_music_volume';
+  var DEFAULT_SFX_VOLUME = 72;
+  var DEFAULT_MUSIC_VOLUME = 72;
+
+  function clampVolumePercent(value, fallback) {
+    var numeric = Number(value);
+    if (!isFinite(numeric)) return fallback;
+    return Math.max(0, Math.min(100, Math.round(numeric)));
+  }
+
+  function loadVolumePercent(key, fallback) {
+    try {
+      var raw = window.localStorage.getItem(key);
+      if (raw == null) return fallback;
+      return clampVolumePercent(raw, fallback);
+    } catch (_err) {
+      return fallback;
+    }
+  }
+
+  function saveVolumePercent(key, value) {
+    try {
+      window.localStorage.setItem(key, String(clampVolumePercent(value, 0)));
+    } catch (_err) {
+      /* no-op */
+    }
+  }
+
+  function applyMusicVolumeToCurrentPage() {
+    var bgm = document.getElementById('pintagol-bgm');
+    if (!bgm) return;
+    var musicPercent = loadVolumePercent(AUDIO_MUSIC_KEY, DEFAULT_MUSIC_VOLUME);
+    bgm.volume = musicPercent / 100;
+  }
 
   function createMapTexture() {
     var w = 1024, h = 512;
@@ -109,23 +144,56 @@
       if (wrap) wrap.style.setProperty('--fill-width', value + '%');
     }
 
-    function onInput(ev, wrap) {
-      var val = ev.target.value;
+    function onInput(ev, wrap, storageKey) {
+      var val = clampVolumePercent(ev.target.value, 0);
+      ev.target.value = String(val);
       updateFill(wrap, val);
+      if (storageKey) {
+        saveVolumePercent(storageKey, val);
+        if (storageKey === AUDIO_MUSIC_KEY) applyMusicVolumeToCurrentPage();
+      }
     }
 
     if (sonido && sonidoWrap) {
+      sonido.value = String(loadVolumePercent(AUDIO_SFX_KEY, DEFAULT_SFX_VOLUME));
       updateFill(sonidoWrap, sonido.value);
-      sonido.addEventListener('input', function (e) { onInput(e, sonidoWrap); });
+      sonido.addEventListener('input', function (e) { onInput(e, sonidoWrap, AUDIO_SFX_KEY); });
     }
     if (musica && musicaWrap) {
+      musica.value = String(loadVolumePercent(AUDIO_MUSIC_KEY, DEFAULT_MUSIC_VOLUME));
       updateFill(musicaWrap, musica.value);
-      musica.addEventListener('input', function (e) { onInput(e, musicaWrap); });
+      musica.addEventListener('input', function (e) { onInput(e, musicaWrap, AUDIO_MUSIC_KEY); });
     }
   }
 
   function initButtons() {
     var btn = document.getElementById('btn-volver');
+    var btnConfirmarSilencio = document.getElementById('btn-confirmar-silencio');
+    var sonido = document.getElementById('slider-sonido');
+    var musica = document.getElementById('slider-musica');
+    var sonidoWrap = sonido ? sonido.closest('.slider-wrap') : null;
+    var musicaWrap = musica ? musica.closest('.slider-wrap') : null;
+
+    function updateFill(wrap, value) {
+      if (wrap) wrap.style.setProperty('--fill-width', value + '%');
+    }
+
+    if (btnConfirmarSilencio) {
+      btnConfirmarSilencio.addEventListener('click', function () {
+        saveVolumePercent(AUDIO_SFX_KEY, 0);
+        saveVolumePercent(AUDIO_MUSIC_KEY, 0);
+        if (sonido) {
+          sonido.value = '0';
+          updateFill(sonidoWrap, 0);
+        }
+        if (musica) {
+          musica.value = '0';
+          updateFill(musicaWrap, 0);
+        }
+        applyMusicVolumeToCurrentPage();
+      });
+    }
+
     if (btn) {
       btn.addEventListener('click', function () {
         window.location.href = 'index.html';
