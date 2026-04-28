@@ -50,6 +50,13 @@ import {
   showLocalPlayerName,
   compactPlayerId
 } from "./astro-sync-player.js";
+import { loadMapCabin } from "./map/map-cabin.js";
+import { loadMapCasa } from "./map/map-casa.js";
+import { loadMapAmmobox, AMMOBOX_CONFIG } from "./map/map-ammobox.js";
+import { loadMapPuente } from "./map/map-puente.js";
+import { loadMapPozoAgua } from "./map/map-pozo-agua.js";
+import { resolveMapPlayerXZClamped } from "./map/map-structure-collisions.js";
+import { playAstronautDeathExplosion, HIDE_DELAY_MS } from "./astro-sync-death-fx.js";
 
 const FBX_URLS = ["assets/models/astro/astronout.fbx", "/assets/models/astro/astronout.fbx"];
 const PNG_URLS = ["assets/models/astro/astronout.jpg", "/assets/models/astro/astronout.jpg"];
@@ -122,6 +129,9 @@ const BOMB_PICKUP_RADIUS = 1.8;
 const BOMB_PICKUP_CENTER = new THREE.Vector3(16.8, 0.72, 18.2);
 const BOMB_DAMAGE_BOOST_MULTIPLIER = 2;
 const BOMB_DAMAGE_BOOST_DURATION_MS = 6000;
+const AMMOBOX_INTERACTION_RADIUS = 2.45;
+const AMMOBOX_WEAPON_SWAP_COOLDOWN_MS = 2200;
+/** Pinares dispersos por todo el terreno jugable (±ASTRO_BORDE); menos árboles que antes para dejar aire al decorado. */
 const PINE_LAYOUT = [
   { model: "pine2", x: -24, z: -24, rotY: 0.3, scale: 0.86 },
   { model: "pine3", x: -20, z: -26, rotY: 1.1, scale: 1.0 },
@@ -130,7 +140,24 @@ const PINE_LAYOUT = [
   { model: "pine2", x: -26, z: 21, rotY: 0.7, scale: 0.88 },
   { model: "pine3", x: -23, z: 25, rotY: 1.8, scale: 0.98 },
   { model: "pine2", x: 23, z: 22, rotY: 2.2, scale: 0.92 },
-  { model: "pine3", x: 27, z: 26, rotY: 0.2, scale: 1.02 }
+  { model: "pine3", x: 27, z: 26, rotY: 0.2, scale: 1.02 },
+  { model: "pine2", x: -40, z: -8, rotY: 0.55, scale: 0.9 },
+  { model: "pine3", x: -35, z: 2, rotY: 1.4, scale: 0.97 },
+  { model: "pine2", x: -38, z: 12, rotY: 2.1, scale: 0.88 },
+  { model: "pine3", x: -33, z: -12, rotY: 0.2, scale: 1.0 },
+  { model: "pine2", x: -18, z: -36, rotY: 1.6, scale: 0.91 },
+  { model: "pine3", x: -8, z: -40, rotY: 2.8, scale: 0.99 },
+  { model: "pine3", x: 35, z: -38, rotY: 0.45, scale: 1.01 },
+  { model: "pine2", x: 40, z: -14, rotY: 1.9, scale: 0.89 },
+  { model: "pine3", x: 38, z: 6, rotY: 2.6, scale: 0.96 },
+  { model: "pine2", x: 41, z: 18, rotY: 1.1, scale: 0.94 },
+  { model: "pine3", x: 32, z: 38, rotY: 0.75, scale: 1.02 },
+  { model: "pine2", x: -16, z: 38, rotY: 0.35, scale: 0.91 },
+  { model: "pine3", x: -40, z: 22, rotY: 2.2, scale: 1.0 },
+  { model: "pine2", x: -30, z: -38, rotY: 2.35, scale: 0.92 },
+  { model: "pine3", x: -42, z: -18, rotY: 1.25, scale: 1.04 },
+  { model: "pine3", x: -22, z: 32, rotY: 0.85, scale: 1.01 },
+  { model: "pine2", x: 42, z: 28, rotY: 0.15, scale: 0.91 }
 ];
 
 /** Modo extra en la misma escena (p. ej. zombie PvE). No mezclar con colisión de jugador. */
@@ -336,6 +363,8 @@ let isAiming = false;
 let astroRoot = null;
 /** Arma 2 (CVBN). @type {THREE.Object3D | null} */
 let gun2Root = null;
+/** Clon del subfusil (mano) para volver a equiparte sin recargar el FBX. */
+let gun2HandTemplate = null;
 /** Plantilla del modelo de bala cargado desde assets/models/bullet. */
 let bulletTemplate = null;
 let gun3Template = null;
@@ -355,10 +384,10 @@ let pine3Template = null;
 let pineGroup = null;
 let localWeaponType = "gun2";
 let hasPickedGun3 = false;
-let gun3PickupAvailable = true;
+let gun3PickupAvailable = false;
 let gun3OwnerPlayerId = "";
 let hasPickedShotgun = false;
-let shotgunPickupAvailable = true;
+let shotgunPickupAvailable = false;
 let shotgunOwnerPlayerId = "";
 let medkitAvailable = true;
 let medkitOwnerPlayerId = "";
@@ -389,6 +418,7 @@ const gun1ShotSfxPool = [];
 const gun3ShotSfxPool = [];
 const shotgunShotSfxPool = [];
 const itemPickupSfxPool = [];
+let lastAmmoboxWeaponSwapAt = 0;
 let gun1ShotSfxIndex = 0;
 let gun3ShotSfxIndex = 0;
 let shotgunShotSfxIndex = 0;
@@ -840,11 +870,42 @@ function tryConsumeBombLocal() {
   });
 }
 
-function equipGun3Local() {
-  if (hasPickedGun3 || !gun3PickupAvailable || !gun3Template || !astroRoot) return;
-  hasPickedGun3 = true;
+function equipGun2Local(opts) {
+  const o = opts && typeof opts === "object" ? opts : {};
+  const fromAmmobox = !!o.fromAmmobox;
+  if (!gun2HandTemplate || !astroRoot) return;
+  if (gun2Root && gun2Root.parent) {
+    gun2Root.parent.remove(gun2Root);
+    gun2Root = null;
+  }
+  const g2 = gun2HandTemplate.clone(true);
+  setupGunMesh(g2, null, WORLD_GROUP_SCALE, gun2World, gunSetupOptions(GUN2_SCALE, GUN2_BASE_ROTATION));
+  g2.name = "weapon-gun2";
+  gun2Root = g2;
+  astroRoot.add(g2);
+  hasPickedGun3 = false;
   hasPickedShotgun = false;
-  applyGun3PickupState(false, LOCAL_PLAYER_ID);
+  setWeaponType("gun2");
+  if (fromAmmobox) {
+    setStatus("Caja de municion: subfusil.", true);
+  }
+}
+
+function equipGun3Local(opts) {
+  const o = opts && typeof opts === "object" ? opts : {};
+  const force = !!o.force;
+  const fromInitial = !!o.fromInitial;
+  const fromAmmobox = !!o.fromAmmobox;
+  if (!gun3Template || !astroRoot) return;
+  if (!force) {
+    if (hasPickedGun3 || !gun3PickupAvailable) return;
+    hasPickedGun3 = true;
+    hasPickedShotgun = false;
+    applyGun3PickupState(false, LOCAL_PLAYER_ID);
+  } else {
+    hasPickedGun3 = true;
+    hasPickedShotgun = false;
+  }
   if (gun2Root && gun2Root.parent) {
     gun2Root.parent.remove(gun2Root);
     gun2Root = null;
@@ -855,18 +916,36 @@ function equipGun3Local() {
   gun2Root = gun3;
   astroRoot.add(gun3);
   setWeaponType("gun3");
-  sendSyncMessage({
-    tipo: "gun3State",
-    available: false,
-    ownerPlayerId: LOCAL_PLAYER_ID
-  });
+  if (!force) {
+    sendSyncMessage({
+      tipo: "gun3State",
+      available: false,
+      ownerPlayerId: LOCAL_PLAYER_ID
+    });
+  }
+  if (fromAmmobox) {
+    setStatus("Caja de municion: pistola.", true);
+  }
+  if (fromInitial) {
+    pendingInitialWeaponType = null;
+  }
 }
 
-function equipShotgunLocal() {
-  if (hasPickedShotgun || !shotgunPickupAvailable || !shotgunTemplate || !astroRoot) return;
-  hasPickedShotgun = true;
-  hasPickedGun3 = false;
-  applyShotgunPickupState(false, LOCAL_PLAYER_ID);
+function equipShotgunLocal(opts) {
+  const o = opts && typeof opts === "object" ? opts : {};
+  const force = !!o.force;
+  const fromInitial = !!o.fromInitial;
+  const fromAmmobox = !!o.fromAmmobox;
+  if (!shotgunTemplate || !astroRoot) return;
+  if (!force) {
+    if (hasPickedShotgun || !shotgunPickupAvailable) return;
+    hasPickedShotgun = true;
+    hasPickedGun3 = false;
+    applyShotgunPickupState(false, LOCAL_PLAYER_ID);
+  } else {
+    hasPickedShotgun = true;
+    hasPickedGun3 = false;
+  }
   if (gun2Root && gun2Root.parent) {
     gun2Root.parent.remove(gun2Root);
     gun2Root = null;
@@ -877,11 +956,49 @@ function equipShotgunLocal() {
   gun2Root = shotgun;
   astroRoot.add(shotgun);
   setWeaponType("shotgun");
-  sendSyncMessage({
-    tipo: "shotgunState",
-    available: false,
-    ownerPlayerId: LOCAL_PLAYER_ID
-  });
+  if (!force) {
+    sendSyncMessage({
+      tipo: "shotgunState",
+      available: false,
+      ownerPlayerId: LOCAL_PLAYER_ID
+    });
+  }
+  if (fromAmmobox) {
+    setStatus("Caja de municion: escopeta.", true);
+  }
+  if (fromInitial) {
+    pendingInitialWeaponType = null;
+  }
+}
+
+function tryAmmoboxRandomWeaponSwap(nowMs) {
+  if (!astroRoot || localDefeated) return;
+  if (nowMs - lastAmmoboxWeaponSwapAt < AMMOBOX_WEAPON_SWAP_COOLDOWN_MS) return;
+  const ax = AMMOBOX_CONFIG.x;
+  const az = AMMOBOX_CONFIG.z;
+  const dx = astroRoot.position.x - ax;
+  const dz = astroRoot.position.z - az;
+  if (dx * dx + dz * dz > AMMOBOX_INTERACTION_RADIUS * AMMOBOX_INTERACTION_RADIUS) return;
+  const pool = [];
+  if (gun2HandTemplate) pool.push("gun2");
+  if (gun3Template) pool.push("gun3");
+  if (shotgunTemplate) pool.push("shotgun");
+  if (!pool.length) return;
+  const different = pool.filter((w) => w !== localWeaponType);
+  if (!different.length) return;
+  const pick = different[Math.floor(Math.random() * different.length)];
+  lastAmmoboxWeaponSwapAt = nowMs;
+  playItemPickupSfx();
+  if (pick === "gun2") {
+    equipGun2Local({ fromAmmobox: true });
+  } else if (pick === "gun3") {
+    equipGun3Local({ force: true, fromAmmobox: true });
+  } else {
+    equipShotgunLocal({ force: true, fromAmmobox: true });
+  }
+  if (getVentanaId() !== "2") {
+    sendPose();
+  }
 }
 
 function updateGun3Pickup(nowMs) {
@@ -1220,7 +1337,22 @@ function setPlayerEliminatedVisual(playerGroup, eliminated) {
 
 function syncRemoteDefeatVisual(remotePlayerState) {
   if (!remotePlayerState || !remotePlayerState.group) return;
-  setPlayerEliminatedVisual(remotePlayerState.group, !!remotePlayerState.defeated);
+  const now = !!remotePlayerState.defeated;
+  const was = remotePlayerState._wasDefeated === true;
+  if (now && !was) {
+    const p = remotePlayerState.group.position.clone();
+    p.y += 1.15;
+    playAstronautDeathExplosion(
+      scene,
+      p,
+      remotePlayerState.colorHex ?? PLAYER_COLORS[0],
+      registerPintagolSceneFrameHandler
+    );
+    window.setTimeout(() => setPlayerEliminatedVisual(remotePlayerState.group, true), HIDE_DELAY_MS);
+  } else {
+    setPlayerEliminatedVisual(remotePlayerState.group, now);
+  }
+  remotePlayerState._wasDefeated = now;
 }
 
 function findSpectatorTarget() {
@@ -1249,14 +1381,22 @@ function updateSpectatorCamera() {
   camera.lookAt(0, 0, 0);
 }
 
-function enterSpectatorMode(message) {
+function enterSpectatorMode(message, options = {}) {
   if (spectatorMode) return;
   spectatorMode = true;
   setAimMode(false);
   fireQueued = false;
   keys.w = keys.a = keys.s = keys.d = false;
   keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;
-  setPlayerEliminatedVisual(astroRoot, true);
+  const skipFx = options && options.skipExplosion === true;
+  if (!skipFx && astroRoot) {
+    const p = astroRoot.position.clone();
+    p.y += 1.2;
+    playAstronautDeathExplosion(scene, p, localPlayerColor, registerPintagolSceneFrameHandler);
+    window.setTimeout(() => setPlayerEliminatedVisual(astroRoot, true), HIDE_DELAY_MS);
+  } else {
+    setPlayerEliminatedVisual(astroRoot, true);
+  }
   setDefeatOverlayVisible(true, message || "Tu barra GameTag se llenó. Ahora estás en modo espectador.");
   updateSpectatorIndicator();
   persistLocalCombatState();
@@ -1972,8 +2112,11 @@ function tickMovement(dt) {
     const speedMultiplier = nowMs < speedBoostUntilMs ? DRINK_SPEED_BOOST_MULTIPLIER : 1;
     const sp = ASTRO_MOVE_SPEED * speedMultiplier;
     if (mx || mz) {
-      wander.x = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.x + mx * sp));
-      wander.z = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.z + mz * sp));
+      const nx = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.x + mx * sp));
+      const nz = Math.max(-ASTRO_BORDE, Math.min(ASTRO_BORDE, wander.z + mz * sp));
+      const resolved = resolveMapPlayerXZClamped(nx, nz, ASTRO_BORDE);
+      wander.x = resolved.x;
+      wander.z = resolved.z;
     }
     astroRoot.position.x = wander.x;
     astroRoot.position.z = wander.z;
@@ -2037,6 +2180,7 @@ function tickMovement(dt) {
   tryConsumeDrinkLocal();
   tryConsumeStarLocal();
   tryConsumeBombLocal();
+  tryAmmoboxRandomWeaponSwap(nowMs);
   updateLocalEffectTimer(nowMs);
   updateBullets(scene, activeBullets, dt);
   processBulletHits();
@@ -2125,6 +2269,11 @@ function loadLocalModelsAndFinish(astroGroup) {
   scheduleNonCriticalLoad(loadBombTemplate, 500);
   scheduleNonCriticalLoad(loadPine2Template, 520);
   scheduleNonCriticalLoad(loadPine3Template, 580);
+  scheduleNonCriticalLoad(() => loadMapCabin({ scene, aniso, pathsFor }), 640);
+  scheduleNonCriticalLoad(() => loadMapCasa({ scene, aniso, pathsFor }), 700);
+  scheduleNonCriticalLoad(() => loadMapPuente({ scene, aniso, pathsFor }), 760);
+  scheduleNonCriticalLoad(() => loadMapAmmobox({ scene, aniso, pathsFor }), 820);
+  scheduleNonCriticalLoad(() => loadMapPozoAgua({ scene, aniso, pathsFor }), 880);
 }
 
 function createFallbackMedkitTemplate() {
@@ -2351,6 +2500,7 @@ function spawnPines() {
   if (!hasAnyTemplate) return;
   const group = new THREE.Group();
   group.name = "pines-group";
+  // Decoración: no forman parte de `map-structure-collisions` (el avatar las puede atravesar).
   PINE_LAYOUT.forEach((cfg) => {
     const template = cfg.model === "pine3" ? pine3Template : pine2Template;
     if (!template) return;
@@ -2424,9 +2574,8 @@ function loadGun3Template() {
             gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION)
           );
           gun3Template = gun3;
-          spawnGun3Pickup();
           if (pendingInitialWeaponType === "gun3") {
-            equipGun3Local();
+            equipGun3Local({ force: true, fromInitial: true });
           }
         },
         () => {
@@ -2446,9 +2595,8 @@ function loadGun3Template() {
             gunSetupOptions(GUN3_HAND_SCALE, GUN3_BASE_ROTATION)
           );
           gun3Template = gun3;
-          spawnGun3Pickup();
           if (pendingInitialWeaponType === "gun3") {
-            equipGun3Local();
+            equipGun3Local({ force: true, fromInitial: true });
           }
         },
         () => {
@@ -2475,9 +2623,8 @@ function loadShotgunTemplate() {
             gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION)
           );
           shotgunTemplate = shotgunObj;
-          spawnShotgunPickup();
           if (pendingInitialWeaponType === "shotgun") {
-            equipShotgunLocal();
+            equipShotgunLocal({ force: true, fromInitial: true });
           }
         },
         () => {
@@ -2497,9 +2644,8 @@ function loadShotgunTemplate() {
             gunSetupOptions(SHOTGUN_HAND_SCALE, SHOTGUN_BASE_ROTATION)
           );
           shotgunTemplate = shotgunObj;
-          spawnShotgunPickup();
           if (pendingInitialWeaponType === "shotgun") {
-            equipShotgunLocal();
+            equipShotgunLocal({ force: true, fromInitial: true });
           }
         },
         () => {
@@ -2606,6 +2752,7 @@ function spawnRemotePlayer(
           colorHex: playerColor,
           hits: initialHits,
           defeated: !!remoteDefeated,
+          _wasDefeated: !!remoteDefeated,
           damageSeq: Math.max(0, Math.floor(Number(remoteDamageSeq) || 0)),
           weaponType: normalizedWeaponType(remoteWeaponType),
           playerName: playerName || compactPlayerId(playerId),
@@ -2668,9 +2815,9 @@ function placeInScene(astroGroup, gun2) {
   localWeaponType = "gun2";
   hasPickedGun3 = false;
   hasPickedShotgun = false;
-  gun3PickupAvailable = true;
+  gun3PickupAvailable = false;
   gun3OwnerPlayerId = "";
-  shotgunPickupAvailable = true;
+  shotgunPickupAvailable = false;
   shotgunOwnerPlayerId = "";
   medkitAvailable = true;
   medkitOwnerPlayerId = "";
@@ -2708,7 +2855,7 @@ function placeInScene(astroGroup, gun2) {
   setDefeatOverlayVisible(false);
   updateNameTag(astroGroup, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
   if (localDefeated) {
-    enterSpectatorMode("Ya estabas eliminado. Sigues en modo espectador.");
+    enterSpectatorMode("Ya estabas eliminado. Sigues en modo espectador.", { skipExplosion: true });
     setStatus("Modo espectador restaurado tras recarga.", false);
   } else {
     persistLocalCombatState();
@@ -2716,22 +2863,21 @@ function placeInScene(astroGroup, gun2) {
   }
   recomputePlayerColors();
   if (gun2) {
+    gun2HandTemplate = gun2.clone(true);
     gun2Root = gun2;
     astroGroup.add(gun2);
     gun2.position.set(gun2World.x, gun2World.y, gun2World.z);
   }
-  spawnGun3Pickup();
-  spawnShotgunPickup();
   spawnMedkitPickup();
   spawnDrinkPickup();
   spawnStarPickup();
   spawnBombPickup();
   if (localWeaponType === "gun3") {
     pendingInitialWeaponType = "gun3";
-    equipGun3Local();
+    equipGun3Local({ force: true, fromInitial: true });
   } else if (localWeaponType === "shotgun") {
     pendingInitialWeaponType = "shotgun";
-    equipShotgunLocal();
+    equipShotgunLocal({ force: true, fromInitial: true });
   } else {
     pendingInitialWeaponType = null;
   }
@@ -2831,6 +2977,11 @@ export function setPintagolZombieSyncForPose(fn) {
 
 export function getPintagolSyncScene() {
   return scene;
+}
+
+/** Contexto para props de mapa (mismas rutas/anisotropía que en batalla). Útil en modo zombie. */
+export function getPintagolMapLoadContext() {
+  return { scene, aniso, pathsFor };
 }
 
 export function getPintagolLocalPlayerId() {
