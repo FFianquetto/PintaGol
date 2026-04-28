@@ -14,7 +14,7 @@ export const PUENTE_CONFIG = {
   /** Alinea el tramo largo del mesh; ajusta in-game si hace falta. */
   rotY: 0.35,
   targetHeight: 3.6,
-  sinkIntoGround: 0.78,
+  sinkIntoGround: 0.98,
   liftAboveGround: 0,
   collisionMargin: 0.75
 };

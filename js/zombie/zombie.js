@@ -171,6 +171,10 @@
 
   function getRenderableGame() {
     var game = store.getGame();
+    if (expectedGameId && game && game.id && game.id !== expectedGameId) {
+      // En línea: forzar permanencia en la partida/mapa asignado por matchmaking.
+      return null;
+    }
     if (!game || game.status !== 'active' || !Array.isArray(game.players) || !game.players.length) {
       var room = store.getRoom();
       var roomPlayers = (room && room.players ? room.players : []).filter(function (player) {
@@ -239,7 +243,13 @@
 
   function syncScene() {
     var game = getRenderableGame();
-    if (!game) return;
+    if (!game) {
+      var statusWeapon = document.getElementById('multiplayer-country');
+      if (statusWeapon) {
+        statusWeapon.textContent = 'Esperando sincronización de la misma partida...';
+      }
+      return;
+    }
     gameScene.syncPlayers(game.players, clock.getElapsedTime());
   }
 

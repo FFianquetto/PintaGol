@@ -1746,6 +1746,29 @@ function handleRemoteHit(d) {
   });
 }
 
+/**
+ * Dano externo al jugador local (p.ej. toque zombie) sin depender de que el
+ * transporte de red se refleje en la misma pestaña.
+ */
+export function applyPintagolExternalLocalHit(hitColorHex = 0xffffff, damage = 1) {
+  if (!astroRoot || localDefeated) return false;
+  const color = typeof hitColorHex === "number" ? hitColorHex : 0xffffff;
+  const delta = Math.max(1, Math.floor(Number(damage) || 1));
+  const applied = applyHitToLocalPlayer(color, delta);
+  if (!applied) return false;
+  addHitStain(astroRoot, color);
+  sendPose();
+  sendSyncMessage({
+    tipo: "damage",
+    playerId: LOCAL_PLAYER_ID,
+    hits: localHits,
+    defeated: localDefeated,
+    hitColorHex: color,
+    damageSeq: localDamageSeq
+  });
+  return true;
+}
+
 function resetGameplayInputs() {
   keys.w = keys.a = keys.s = keys.d = false;
   keysGun2.c = keysGun2.v = keysGun2.b = keysGun2.n = false;

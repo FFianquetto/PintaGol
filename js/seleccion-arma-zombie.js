@@ -1,30 +1,9 @@
 (function () {
   'use strict';
 
-  var scene, camera, renderer, mapPlane;
+  var scene, camera, renderer;
   var selectedWeapon = null;
   var ZOMBIE_PLAYER_KEY = 'pintagol_zombie_selected_player';
-
-  function createMapTexture() {
-    var w = 1024, h = 512;
-    var canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    var ctx = canvas.getContext('2d');
-    var gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, '#164e63');
-    gradient.addColorStop(0.55, '#0f766e');
-    gradient.addColorStop(1, '#14532d');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = '#2f3f2f';
-    for (var i = 0; i < 16; i++) {
-      ctx.fillRect(40 + i * 60, 120 + (i % 3) * 8, 20, 160);
-    }
-    var texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    return texture;
-  }
 
   function initScene() {
     var canvasEl = document.getElementById('zombie-canvas');
@@ -37,12 +16,6 @@
     renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    var mapTexture = createMapTexture();
-    var mapGeometry = new THREE.PlaneGeometry(20, 10);
-    var mapMaterial = new THREE.MeshBasicMaterial({ map: mapTexture, depthWrite: true, side: THREE.DoubleSide });
-    mapPlane = new THREE.Mesh(mapGeometry, mapMaterial);
-    mapPlane.position.z = -2;
-    scene.add(mapPlane);
     window.addEventListener('resize', onResize);
     onResize();
     animate();
