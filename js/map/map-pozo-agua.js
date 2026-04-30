@@ -9,16 +9,16 @@ import { applyMapStructureShine, DEFAULT_MAP_STRUCTURE_SHINE } from "./map-struc
 const GROUND_Y = -0.02;
 
 export const POZO_CONFIG = {
-  x: 28,
-  z: -22,
-  rotY: 0.55,
+  x: 5,
+  z: -11,
+  rotY: 0.35,
   targetHeight: 6.4,
   sinkIntoGround: 0.48,
   liftAboveGround: 0,
   collisionMargin: 0.6,
-  waterMaxDiameter: 3.5,
+  waterMaxDiameter: 5.1,
   /** Casi al fondo del brocal (cerca del “piso” interno), no flotando arriba. */
-  waterLevelFrac: 0.09
+  waterLevelFrac: 0.1
 };
 
 const POZO_SHINE = {

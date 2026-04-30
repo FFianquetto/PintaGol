@@ -11,12 +11,14 @@ import * as THREE from "three";
 export const MAP_PLAYER_FOOT_RADIUS = 0.62;
 
 const _footprintBoxes = [];
+const _worldAabbs = [];
 
 /**
  * Limpia todos los colisionadores (p. ej. al recargar mapa o resetear partida).
  */
 export function clearMapStructureColliders() {
   _footprintBoxes.length = 0;
+  _worldAabbs.length = 0;
 }
 
 /**
@@ -29,6 +31,14 @@ export function registerMapStructureFootprintFromBox3(box3, margin = 0) {
   _footprintBoxes.push({
     minX: box3.min.x - m,
     maxX: box3.max.x + m,
+    minZ: box3.min.z - m,
+    maxZ: box3.max.z + m
+  });
+  _worldAabbs.push({
+    minX: box3.min.x - m,
+    maxX: box3.max.x + m,
+    minY: box3.min.y,
+    maxY: box3.max.y,
     minZ: box3.min.z - m,
     maxZ: box3.max.z + m
   });
@@ -76,6 +86,44 @@ export function resolveMapPlayerXZClamped(x, z, limit, radius = MAP_PLAYER_FOOT_
   const cx = Math.max(-limit, Math.min(limit, x));
   const cz = Math.max(-limit, Math.min(limit, z));
   return resolveMapPlayerXZ(cx, cz, radius);
+}
+
+/**
+ * Devuelve true si un segmento de bala intersecta cualquier estructura registrada.
+ * Usa muestreo a lo largo del segmento para mantener costo bajo.
+ * @param {{x:number,y:number,z:number}} prevPos
+ * @param {{x:number,y:number,z:number}} currPos
+ * @param {number} [steps=10]
+ */
+export function segmentIntersectsMapStructure(prevPos, currPos, steps = 10) {
+  if (!prevPos || !currPos || !_worldAabbs.length) return false;
+  if (pointInsideAnyAabb(currPos)) return true;
+  const n = Math.max(2, Math.floor(Number(steps) || 10));
+  for (let i = 1; i <= n; i += 1) {
+    const t = i / n;
+    const x = prevPos.x + (currPos.x - prevPos.x) * t;
+    const y = prevPos.y + (currPos.y - prevPos.y) * t;
+    const z = prevPos.z + (currPos.z - prevPos.z) * t;
+    if (pointInsideAnyAabb({ x, y, z })) return true;
+  }
+  return false;
+}
+
+function pointInsideAnyAabb(point) {
+  for (let i = 0; i < _worldAabbs.length; i += 1) {
+    const b = _worldAabbs[i];
+    if (
+      point.x >= b.minX &&
+      point.x <= b.maxX &&
+      point.y >= b.minY &&
+      point.y <= b.maxY &&
+      point.z >= b.minZ &&
+      point.z <= b.maxZ
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

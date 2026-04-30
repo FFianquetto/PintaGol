@@ -20,6 +20,11 @@ export const AMMOBOX_CONFIG = {
   collisionMargin: 0.22
 };
 
+const AMMOBOX_EXTRA_OFFSETS = [
+  { dx: 14.5, dz: 9.2, rotY: -0.2 },
+  { dx: -15.2, dz: -10.4, rotY: 1.05 }
+];
+
 const AMMOBOX_SHINE = {
   ...DEFAULT_MAP_STRUCTURE_SHINE,
   roughness: 0.55,
@@ -30,6 +35,21 @@ const AMMOBOX_SHINE = {
 
 function mergeConfig(overrides) {
   return { ...AMMOBOX_CONFIG, ...overrides };
+}
+
+function buildAmmoboxLayout(baseConfig) {
+  const base = { ...baseConfig };
+  const extras = AMMOBOX_EXTRA_OFFSETS.map((off) => ({
+    ...baseConfig,
+    x: baseConfig.x + off.dx,
+    z: baseConfig.z + off.dz,
+    rotY: typeof off.rotY === "number" ? off.rotY : baseConfig.rotY
+  }));
+  return [base, ...extras];
+}
+
+export function getAmmoboxInteractionPoints(config = AMMOBOX_CONFIG) {
+  return buildAmmoboxLayout(config).map((cfg) => ({ x: cfg.x, z: cfg.z }));
 }
 
 function placeObject(obj, config) {
@@ -72,17 +92,22 @@ export function loadMapAmmobox(context, configOverride) {
   const objUrls = objUrlBases().flatMap((rel) => pathsFor(rel));
   const texUrls = textureUrlBases().flatMap((rel) => pathsFor(rel));
 
-  const onObj = (obj) => {
-    obj.name = "map-ammobox-mesh";
-    applyMapStructureShine(obj, AMMOBOX_SHINE);
-    placeObject(obj, config);
-    const group = new THREE.Group();
-    group.name = "map-ammobox";
-    group.add(obj);
-    scene.add(group);
-    group.updateMatrixWorld(true);
-    const m = config.collisionMargin != null ? config.collisionMargin : 0.22;
-    registerMapStructureFootprintFromObject(group, m);
+  const onObj = (templateObj) => {
+    const layout = buildAmmoboxLayout(config);
+    for (let i = 0; i < layout.length; i += 1) {
+      const cfg = layout[i];
+      const obj = templateObj.clone(true);
+      obj.name = `map-ammobox-mesh-${i + 1}`;
+      applyMapStructureShine(obj, AMMOBOX_SHINE);
+      placeObject(obj, cfg);
+      const group = new THREE.Group();
+      group.name = `map-ammobox-${i + 1}`;
+      group.add(obj);
+      scene.add(group);
+      group.updateMatrixWorld(true);
+      const m = cfg.collisionMargin != null ? cfg.collisionMargin : 0.22;
+      registerMapStructureFootprintFromObject(group, m);
+    }
   };
 
   loadTextureFirst(

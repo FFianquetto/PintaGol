@@ -11,11 +11,9 @@ import {
   registerPintagolPedirSyncListener,
   setPintagolZombieSyncForPose,
   getPintagolSyncScene,
-  getPintagolMapLoadContext,
   getPintagolLocalPlayerId,
   sendPintagolVistaMessage
 } from "../astro-sync.js";
-import { loadZombieModeDoor } from "../map/map-door-zombie.js";
 
 const ZOMBIE_MAX_HITS = 5;
 const HIT_AABB_PAD = 0.45;
@@ -369,20 +367,6 @@ function loadZombieCenter() {
   );
 }
 
-function scheduleZombieDoorLoad() {
-  const run = () => {
-    const ctx = getPintagolMapLoadContext();
-    if (ctx && ctx.scene) {
-      loadZombieModeDoor(ctx);
-    }
-  };
-  if (typeof window !== "undefined") {
-    window.setTimeout(run, 220);
-  } else {
-    run();
-  }
-}
-
 export function initZombieAstroMode() {
   if (unregBullet) {
     return;
@@ -393,8 +377,6 @@ export function initZombieAstroMode() {
   unregFrame = registerPintagolSceneFrameHandler(onFrameZombie);
   unregVista = registerPintagolZombieVistaHandler(onVistaZombieState);
   unregPedir = registerPintagolPedirSyncListener(onPedirSyncResend);
-  /** Solo zombie: puerta de escenario (batalla PvP no carga este módulo). */
-  scheduleZombieDoorLoad();
 }
 
 export function destroyZombieAstroMode() {

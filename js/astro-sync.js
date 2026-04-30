@@ -52,10 +52,18 @@ import {
 } from "./astro-sync-player.js";
 import { loadMapCabin } from "./map/map-cabin.js";
 import { loadMapCasa } from "./map/map-casa.js";
-import { loadMapAmmobox, AMMOBOX_CONFIG } from "./map/map-ammobox.js";
-import { loadMapPuente } from "./map/map-puente.js";
+import { loadMapIglu, IGLU_CONFIG } from "./map/map-iglu.js";
+import { loadMapTent } from "./map/map-tent.js";
+import { loadMapWoodhouse } from "./map/map-woodhouse.js";
+import { loadMapAmmobox, AMMOBOX_CONFIG, getAmmoboxInteractionPoints } from "./map/map-ammobox.js";
+import { loadMapDumpster } from "./map/map-dumpster.js";
+import { loadMapFirepit, FIREPIT_CONFIG } from "./map/map-firepit.js";
 import { loadMapPozoAgua } from "./map/map-pozo-agua.js";
-import { resolveMapPlayerXZClamped } from "./map/map-structure-collisions.js";
+import {
+  registerMapStructureFootprintFromObject,
+  resolveMapPlayerXZClamped,
+  segmentIntersectsMapStructure
+} from "./map/map-structure-collisions.js";
 import { playAstronautDeathExplosion, HIDE_DELAY_MS } from "./astro-sync-death-fx.js";
 
 const FBX_URLS = ["assets/models/astro/astronout.fbx", "/assets/models/astro/astronout.fbx"];
@@ -106,6 +114,7 @@ const GUN1_SHOT_SFX_URL = "assets/sfx/items/sub.mp3";
 const GUN3_SHOT_SFX_URL = "assets/sfx/items/pistol.mp3";
 const SHOTGUN_SHOT_SFX_URL = "assets/sfx/items/shotgun.mp3";
 const ITEM_PICKUP_SFX_URL = "assets/sfx/items/item.mp3";
+const FIREPIT_SFX_URL = "assets/sfx/firepit.mp3";
 const GUN1_SHOT_POOL_SIZE = 4;
 const ITEM_PICKUP_POOL_SIZE = 4;
 const AUDIO_SFX_KEY = "pintagol_audio_sfx_volume";
@@ -129,6 +138,9 @@ const BOMB_PICKUP_RADIUS = 1.8;
 const BOMB_PICKUP_CENTER = new THREE.Vector3(16.8, 0.72, 18.2);
 const BOMB_DAMAGE_BOOST_MULTIPLIER = 2;
 const BOMB_DAMAGE_BOOST_DURATION_MS = 6000;
+const USE_RANDOMIZED_CONSUMABLES = false;
+const BONUS_ITEMS_PER_TYPE = 1;
+const BONUS_ITEM_TYPES = ["medkit", "drink", "star", "bomb"];
 const AMMOBOX_INTERACTION_RADIUS = 2.45;
 const AMMOBOX_WEAPON_SWAP_COOLDOWN_MS = 2200;
 /** Pinares dispersos por todo el terreno jugable (±ASTRO_BORDE); menos árboles que antes para dejar aire al decorado. */
@@ -180,6 +192,7 @@ const statusEl = document.getElementById("astro-status");
 const effectTimerEl = document.getElementById("astro-effect-timer");
 const playerNameHud = document.getElementById("astro-player-name");
 const defeatOverlayEl = document.getElementById("astro-defeat-overlay");
+const defeatTitleEl = document.getElementById("astro-defeat-title");
 const defeatTextEl = document.getElementById("astro-defeat-text");
 const watchMatchBtn = document.getElementById("astro-btn-watch");
 const goMenuBtn = document.getElementById("astro-btn-menu");
@@ -213,6 +226,36 @@ const LOCAL_WEAPON_STATE_KEY = `pintagol_astro_weapon_${CURRENT_GAME_ID || "noga
 const SELECTED_SEASON_KEY = resolveSeasonKey();
 let pendingInitialWeaponType = null;
 
+const SEASON_ITEM_LAYOUTS = {
+  invierno: {
+    gun3: { x: 0, z: 0 },
+    shotgun: { x: 6.2, z: 0 },
+    medkit: { x: 11.5, z: -9.5 },
+    drink: { x: -17.5, z: 14.5 },
+    star: { x: -3.5, z: 19.5 },
+    bomb: { x: 16.8, z: 18.2 },
+    ammobox: { x: 2.5, z: -1.5 }
+  },
+  primavera: {
+    gun3: { x: -8.5, z: -3.2 },
+    shotgun: { x: 11.8, z: -6.2 },
+    medkit: { x: 14.2, z: 9.8 },
+    drink: { x: -13.4, z: 6.4 },
+    star: { x: -4.5, z: -15.3 },
+    bomb: { x: 18.4, z: 12.7 },
+    ammobox: { x: -1.2, z: 3.4 }
+  },
+  otono: {
+    gun3: { x: 7.8, z: 2.8 },
+    shotgun: { x: -10.4, z: -4.6 },
+    medkit: { x: -15.2, z: -11.1 },
+    drink: { x: 13.6, z: -14.4 },
+    star: { x: 5.8, z: 15.8 },
+    bomb: { x: -17.4, z: 11.2 },
+    ammobox: { x: 3.6, z: -3.9 }
+  }
+};
+
 function resolveSeasonKey() {
   const byQuery = (QUERY_PARAMS.get("season") || "").toLowerCase();
   if (SEASON_TO_FLOOR_TEXTURE[byQuery]) return byQuery;
@@ -226,11 +269,79 @@ function resolveSeasonKey() {
   return "invierno";
 }
 
+function hashString32(text) {
+  let h = 2166136261;
+  const raw = String(text || "");
+  for (let i = 0; i < raw.length; i += 1) {
+    h ^= raw.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function createSeededRandom(seed) {
+  let s = (seed >>> 0) || 1;
+  return () => {
+    s += 0x6d2b79f5;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildBonusPickupPlan() {
+  const rnd = createSeededRandom(hashString32(`${CURRENT_GAME_ID || "nogame"}:${SELECTED_SEASON_KEY}`));
+  const plan = [];
+  for (let t = 0; t < BONUS_ITEM_TYPES.length; t += 1) {
+    const type = BONUS_ITEM_TYPES[t];
+    for (let i = 0; i < BONUS_ITEMS_PER_TYPE; i += 1) {
+      const p = randomPositionInPlayArea(rnd, type);
+      plan.push({ id: `bonus-${type}-${i + 1}`, type, position: p });
+    }
+  }
+  return plan;
+}
+
+function baseCenterForBonusType(type) {
+  if (type === "medkit") return MEDKIT_PICKUP_CENTER;
+  if (type === "drink") return DRINK_PICKUP_CENTER;
+  if (type === "star") return STAR_PICKUP_CENTER;
+  if (type === "bomb") return BOMB_PICKUP_CENTER;
+  return MEDKIT_PICKUP_CENTER;
+}
+
+function randomPositionInPlayArea(rnd, type) {
+  const margin = 10;
+  const min = -ASTRO_BORDE + margin;
+  const max = ASTRO_BORDE - margin;
+  const x = min + rnd() * (max - min);
+  const z = min + rnd() * (max - min);
+  const y = baseCenterForBonusType(type).y;
+  return new THREE.Vector3(x, y, z);
+}
+
+function applySeasonItemLayout(seasonKey) {
+  const cfg = SEASON_ITEM_LAYOUTS[seasonKey] || SEASON_ITEM_LAYOUTS.invierno;
+  if (!cfg) return;
+  GUN3_PICKUP_CENTER.set(cfg.gun3.x, GUN3_PICKUP_BASE_Y, cfg.gun3.z);
+  SHOTGUN_PICKUP_CENTER.set(cfg.shotgun.x, SHOTGUN_PICKUP_BASE_Y, cfg.shotgun.z);
+  MEDKIT_PICKUP_CENTER.set(cfg.medkit.x, MEDKIT_PICKUP_CENTER.y, cfg.medkit.z);
+  DRINK_PICKUP_CENTER.set(cfg.drink.x, DRINK_PICKUP_CENTER.y, cfg.drink.z);
+  STAR_PICKUP_CENTER.set(cfg.star.x, STAR_PICKUP_CENTER.y, cfg.star.z);
+  BOMB_PICKUP_CENTER.set(cfg.bomb.x, BOMB_PICKUP_CENTER.y, cfg.bomb.z);
+  AMMOBOX_CONFIG.x = cfg.ammobox.x;
+  AMMOBOX_CONFIG.z = cfg.ammobox.z;
+}
+
 function sendSyncMessage(payload) {
   const next = { ...(payload || {}) };
   if (CURRENT_GAME_ID) next.gameId = CURRENT_GAME_ID;
   enviarVista(next);
 }
+
+applySeasonItemLayout(SELECTED_SEASON_KEY);
+const BONUS_PICKUP_PLAN = buildBonusPickupPlan();
 
 (function renderLocalPlayerNameHud() {
   showLocalPlayerName(playerNameHud, LOCAL_PLAYER_NAME);
@@ -312,10 +423,82 @@ const groundMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.96,
   metalness: 0.02
 });
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 1, 1), groundMaterial);
+
+function buildTerrainGeometry(size, segments, baseY) {
+  const g = new THREE.PlaneGeometry(size, size, segments, segments);
+  const pos = g.attributes.position;
+  const half = size * 0.5;
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const z = pos.getY(i);
+    const nx = x / half;
+    const nz = z / half;
+    const radial = Math.sqrt(nx * nx + nz * nz);
+    const centerWeight = Math.max(0, 1 - radial);
+    const waveA = Math.sin(x * 0.22) * Math.cos(z * 0.19) * 0.34;
+    const waveB = Math.sin((x + z) * 0.12) * 0.3;
+    const edgeBerm = Math.max(0, radial - 0.66) * 1.8;
+    const y = baseY + (waveA + waveB) * (0.34 + centerWeight * 0.78) + edgeBerm;
+    pos.setZ(i, y);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+  return g;
+}
+
+function wallColorForSeason(seasonKey) {
+  if (seasonKey === "invierno") return 0xf8fafc;
+  if (seasonKey === "primavera") return 0x60a5fa;
+  if (seasonKey === "otono") return 0x8b5a2b;
+  return 0x64748b;
+}
+
+function addCornerWalls(targetScene, seasonKey) {
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: wallColorForSeason(seasonKey),
+    roughness: 0.82,
+    metalness: 0.06
+  });
+  const edge = ASTRO_BORDE + 1.2;
+  const wallH = 4.8;
+  const wallT = 1.8;
+  const span = ASTRO_BORDE * 2 + 6;
+  const y = 1.95;
+  const walls = [
+    { size: [span, wallH, wallT], pos: [0, y, -edge] },
+    { size: [span, wallH, wallT], pos: [0, y, edge] },
+    { size: [wallT, wallH, span], pos: [-edge, y, 0] },
+    { size: [wallT, wallH, span], pos: [edge, y, 0] }
+  ];
+  for (let i = 0; i < walls.length; i += 1) {
+    const w = walls[i];
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w.size[0], w.size[1], w.size[2]), wallMat);
+    mesh.position.set(w.pos[0], w.pos[1], w.pos[2]);
+    mesh.name = `map-wall-${i + 1}`;
+    targetScene.add(mesh);
+    registerMapStructureFootprintFromObject(mesh, 0.32);
+  }
+  const towerGeo = new THREE.CylinderGeometry(2.4, 2.8, 6.5, 10);
+  const towers = [
+    [-edge, 2.6, -edge],
+    [edge, 2.6, -edge],
+    [-edge, 2.6, edge],
+    [edge, 2.6, edge]
+  ];
+  for (let i = 0; i < towers.length; i += 1) {
+    const t = towers[i];
+    const tower = new THREE.Mesh(towerGeo, wallMat);
+    tower.position.set(t[0], t[1], t[2]);
+    tower.name = `map-corner-wall-${i + 1}`;
+    targetScene.add(tower);
+    registerMapStructureFootprintFromObject(tower, 0.24);
+  }
+}
+
+const ground = new THREE.Mesh(buildTerrainGeometry(MAP_SIZE, 84, -0.02), groundMaterial);
 ground.rotation.x = -Math.PI / 2;
-ground.position.y = -0.02;
 scene.add(ground);
+addCornerWalls(scene, SELECTED_SEASON_KEY);
 
 loadTextureFirst(
   texturePathsFor(SEASON_TO_FLOOR_TEXTURE[SELECTED_SEASON_KEY] || "snow.jpg"),
@@ -423,6 +606,11 @@ let gun1ShotSfxIndex = 0;
 let gun3ShotSfxIndex = 0;
 let shotgunShotSfxIndex = 0;
 let itemPickupSfxIndex = 0;
+let firepitAmbienceSfx = null;
+let bonusPickups = [];
+let matchEnded = false;
+let matchWinnerPlayerId = "";
+const MATCH_END_REDIRECT_MS = 2600;
 
 function clampVolumePercent(value, fallback) {
   const numeric = Number(value);
@@ -591,6 +779,36 @@ function playItemPickupSfx() {
   }
 }
 
+function initFirepitAmbienceSfx() {
+  if (firepitAmbienceSfx) return;
+  const a = new Audio(FIREPIT_SFX_URL);
+  a.preload = "auto";
+  a.loop = true;
+  a.volume = 0;
+  firepitAmbienceSfx = a;
+}
+
+function updateFirepitAmbienceSfx() {
+  if (SELECTED_SEASON_KEY !== "invierno") return;
+  if (!astroRoot || !firepitAmbienceSfx) return;
+  const dx = astroRoot.position.x - FIREPIT_CONFIG.x;
+  const dz = astroRoot.position.z - FIREPIT_CONFIG.z;
+  const distance = Math.hypot(dx, dz);
+  const audibleRadius = 16;
+  const fullRadius = 2.8;
+  const t = Math.max(0, Math.min(1, (audibleRadius - distance) / Math.max(0.001, audibleRadius - fullRadius)));
+  const targetVolume = Math.min(1, getSfxVolume() * 0.62 * t);
+  firepitAmbienceSfx.volume += (targetVolume - firepitAmbienceSfx.volume) * 0.22;
+  if (targetVolume > 0.015) {
+    if (firepitAmbienceSfx.paused) {
+      const p = firepitAmbienceSfx.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    }
+  } else if (!firepitAmbienceSfx.paused) {
+    firepitAmbienceSfx.pause();
+  }
+}
+
 function setWeaponType(nextWeaponType) {
   localWeaponType = normalizedWeaponType(nextWeaponType);
   persistLocalCombatState();
@@ -691,6 +909,7 @@ function removeMedkitPickup() {
 }
 
 function spawnMedkitPickup() {
+  if (USE_RANDOMIZED_CONSUMABLES) return;
   if (!medkitAvailable || !medkitTemplate || medkitPickup) return;
   medkitPickup = medkitTemplate.clone(true);
   medkitPickup.name = "item-medkit-pickup";
@@ -702,8 +921,13 @@ function spawnMedkitPickup() {
 function applyMedkitPickupState(available, ownerId = "") {
   medkitAvailable = !!available;
   medkitOwnerPlayerId = ownerId || "";
-  if (medkitAvailable) spawnMedkitPickup();
-  else removeMedkitPickup();
+  if (medkitAvailable) {
+    spawnMedkitPickup();
+    ensureBonusPickupsSpawned();
+  } else {
+    removeMedkitPickup();
+    removeBonusPickupsByType("medkit");
+  }
 }
 
 function removeDrinkPickup() {
@@ -713,6 +937,7 @@ function removeDrinkPickup() {
 }
 
 function spawnDrinkPickup() {
+  if (USE_RANDOMIZED_CONSUMABLES) return;
   if (!drinkAvailable || !drinkTemplate || drinkPickup) return;
   drinkPickup = drinkTemplate.clone(true);
   drinkPickup.name = "item-drink-pickup";
@@ -724,8 +949,13 @@ function spawnDrinkPickup() {
 function applyDrinkPickupState(available, ownerId = "") {
   drinkAvailable = !!available;
   drinkOwnerPlayerId = ownerId || "";
-  if (drinkAvailable) spawnDrinkPickup();
-  else removeDrinkPickup();
+  if (drinkAvailable) {
+    spawnDrinkPickup();
+    ensureBonusPickupsSpawned();
+  } else {
+    removeDrinkPickup();
+    removeBonusPickupsByType("drink");
+  }
 }
 
 function applySpeedBoostToLocalPlayer() {
@@ -740,6 +970,7 @@ function removeStarPickup() {
 }
 
 function spawnStarPickup() {
+  if (USE_RANDOMIZED_CONSUMABLES) return;
   if (!starAvailable || !starTemplate || starPickup) return;
   starPickup = starTemplate.clone(true);
   starPickup.name = "item-star-pickup";
@@ -751,8 +982,13 @@ function spawnStarPickup() {
 function applyStarPickupState(available, ownerId = "") {
   starAvailable = !!available;
   starOwnerPlayerId = ownerId || "";
-  if (starAvailable) spawnStarPickup();
-  else removeStarPickup();
+  if (starAvailable) {
+    spawnStarPickup();
+    ensureBonusPickupsSpawned();
+  } else {
+    removeStarPickup();
+    removeBonusPickupsByType("star");
+  }
 }
 
 function applyImmunityToLocalPlayer() {
@@ -767,6 +1003,7 @@ function removeBombPickup() {
 }
 
 function spawnBombPickup() {
+  if (USE_RANDOMIZED_CONSUMABLES) return;
   if (!bombAvailable || !bombTemplate || bombPickup) return;
   bombPickup = bombTemplate.clone(true);
   bombPickup.name = "item-bomb-pickup";
@@ -778,8 +1015,146 @@ function spawnBombPickup() {
 function applyBombPickupState(available, ownerId = "") {
   bombAvailable = !!available;
   bombOwnerPlayerId = ownerId || "";
-  if (bombAvailable) spawnBombPickup();
-  else removeBombPickup();
+  if (bombAvailable) {
+    spawnBombPickup();
+    ensureBonusPickupsSpawned();
+  } else {
+    removeBombPickup();
+    removeBonusPickupsByType("bomb");
+  }
+}
+
+function getTemplateForBonusType(type) {
+  if (type === "medkit") return medkitTemplate;
+  if (type === "drink") return drinkTemplate;
+  if (type === "star") return starTemplate;
+  if (type === "bomb") return bombTemplate;
+  return null;
+}
+
+function bonusRadiusForType(type) {
+  if (type === "medkit") return MEDKIT_PICKUP_RADIUS;
+  if (type === "drink") return DRINK_PICKUP_RADIUS;
+  if (type === "star") return STAR_PICKUP_RADIUS;
+  if (type === "bomb") return BOMB_PICKUP_RADIUS;
+  return 1.8;
+}
+
+function isBonusTypeAvailable(type) {
+  if (type === "medkit") return medkitAvailable;
+  if (type === "drink") return drinkAvailable;
+  if (type === "star") return starAvailable;
+  if (type === "bomb") return bombAvailable;
+  return false;
+}
+
+function removeBonusPickupsByType(type) {
+  for (let i = 0; i < bonusPickups.length; i += 1) {
+    const b = bonusPickups[i];
+    if (!b || b.type !== type || !b.mesh) continue;
+    scene.remove(b.mesh);
+    b.mesh = null;
+    b.picked = true;
+  }
+}
+
+function ensureBonusPickupsSpawned() {
+  if (!BONUS_PICKUP_PLAN.length) return;
+  for (let i = 0; i < BONUS_PICKUP_PLAN.length; i += 1) {
+    const plan = BONUS_PICKUP_PLAN[i];
+    let entry = bonusPickups.find((b) => b.id === plan.id);
+    if (!entry) {
+      entry = { id: plan.id, type: plan.type, position: plan.position.clone(), mesh: null, picked: false };
+      bonusPickups.push(entry);
+    }
+    if (entry.picked || entry.mesh || !isBonusTypeAvailable(entry.type)) continue;
+    const template = getTemplateForBonusType(entry.type);
+    if (!template) continue;
+    const mesh = template.clone(true);
+    mesh.name = `item-${entry.type}-bonus-${i + 1}`;
+    mesh.position.copy(entry.position);
+    mesh.rotation.set(0, 0.25 + i * 0.2, 0);
+    entry.mesh = mesh;
+    scene.add(mesh);
+  }
+}
+
+function updateBonusPickups(nowMs) {
+  for (let i = 0; i < bonusPickups.length; i += 1) {
+    const b = bonusPickups[i];
+    if (!b || !b.mesh || b.picked) continue;
+    const t = nowMs * 0.001 + i * 0.27;
+    b.mesh.rotation.y = 0.2 + t * 1.45;
+    const amp = b.type === "star" ? 0.24 : 0.2;
+    b.mesh.position.y = b.position.y + Math.sin(t * 2.35) * amp;
+  }
+}
+
+function applyBonusTypePickup(type) {
+  if (type === "medkit") {
+    const healed = applyHealToLocalPlayer(MEDKIT_HEAL_AMOUNT);
+    if (healed) {
+      sendPose();
+      sendSyncMessage({
+        tipo: "damage",
+        playerId: LOCAL_PLAYER_ID,
+        hits: localHits,
+        defeated: localDefeated,
+        damageSeq: localDamageSeq
+      });
+    }
+    return;
+  }
+  if (type === "drink") {
+    applySpeedBoostToLocalPlayer();
+    return;
+  }
+  if (type === "star") {
+    applyImmunityToLocalPlayer();
+    return;
+  }
+  if (type === "bomb") applyDamageBoostToLocalPlayer();
+}
+
+function broadcastBonusTypeState(type) {
+  if (type === "medkit") {
+    sendSyncMessage({ tipo: "medkitState", available: false, ownerPlayerId: LOCAL_PLAYER_ID });
+    return;
+  }
+  if (type === "drink") {
+    sendSyncMessage({ tipo: "drinkState", available: false, ownerPlayerId: LOCAL_PLAYER_ID });
+    return;
+  }
+  if (type === "star") {
+    sendSyncMessage({ tipo: "starState", available: false, ownerPlayerId: LOCAL_PLAYER_ID });
+    return;
+  }
+  if (type === "bomb") {
+    sendSyncMessage({ tipo: "bombState", available: false, ownerPlayerId: LOCAL_PLAYER_ID });
+  }
+}
+
+function tryConsumeBonusPickupsLocal() {
+  if (!astroRoot || localDefeated) return;
+  for (let i = 0; i < bonusPickups.length; i += 1) {
+    const b = bonusPickups[i];
+    if (!b || b.picked || !b.mesh || !isBonusTypeAvailable(b.type)) continue;
+    const dx = astroRoot.position.x - b.mesh.position.x;
+    const dz = astroRoot.position.z - b.mesh.position.z;
+    const r = bonusRadiusForType(b.type);
+    if (dx * dx + dz * dz > r * r) continue;
+    b.picked = true;
+    scene.remove(b.mesh);
+    b.mesh = null;
+    playItemPickupSfx();
+    if (b.type === "medkit") applyMedkitPickupState(false, LOCAL_PLAYER_ID);
+    else if (b.type === "drink") applyDrinkPickupState(false, LOCAL_PLAYER_ID);
+    else if (b.type === "star") applyStarPickupState(false, LOCAL_PLAYER_ID);
+    else if (b.type === "bomb") applyBombPickupState(false, LOCAL_PLAYER_ID);
+    applyBonusTypePickup(b.type);
+    broadcastBonusTypeState(b.type);
+    break;
+  }
 }
 
 function applyDamageBoostToLocalPlayer() {
@@ -974,11 +1349,18 @@ function equipShotgunLocal(opts) {
 function tryAmmoboxRandomWeaponSwap(nowMs) {
   if (!astroRoot || localDefeated) return;
   if (nowMs - lastAmmoboxWeaponSwapAt < AMMOBOX_WEAPON_SWAP_COOLDOWN_MS) return;
-  const ax = AMMOBOX_CONFIG.x;
-  const az = AMMOBOX_CONFIG.z;
-  const dx = astroRoot.position.x - ax;
-  const dz = astroRoot.position.z - az;
-  if (dx * dx + dz * dz > AMMOBOX_INTERACTION_RADIUS * AMMOBOX_INTERACTION_RADIUS) return;
+  const points = getAmmoboxInteractionPoints(AMMOBOX_CONFIG);
+  let nearAny = false;
+  for (let i = 0; i < points.length; i += 1) {
+    const p = points[i];
+    const dx = astroRoot.position.x - p.x;
+    const dz = astroRoot.position.z - p.z;
+    if (dx * dx + dz * dz <= AMMOBOX_INTERACTION_RADIUS * AMMOBOX_INTERACTION_RADIUS) {
+      nearAny = true;
+      break;
+    }
+  }
+  if (!nearAny) return;
   const pool = [];
   if (gun2HandTemplate) pool.push("gun2");
   if (gun3Template) pool.push("gun3");
@@ -1279,9 +1661,12 @@ function loadPersistedLocalCombatState() {
   }
 }
 
-function setDefeatOverlayVisible(visible, message) {
+function setDefeatOverlayVisible(visible, message, title = "Perdiste", variant = "defeat") {
   if (!defeatOverlayEl) return;
   defeatOverlayEl.hidden = !visible;
+  const card = defeatOverlayEl.querySelector(".astro-defeat-card");
+  if (card) card.classList.toggle("victory", variant === "victory");
+  if (defeatTitleEl) defeatTitleEl.textContent = title;
   if (visible && defeatTextEl && typeof message === "string" && message.trim()) {
     defeatTextEl.textContent = message;
   }
@@ -1400,6 +1785,51 @@ function enterSpectatorMode(message, options = {}) {
   setDefeatOverlayVisible(true, message || "Tu barra GameTag se llenó. Ahora estás en modo espectador.");
   updateSpectatorIndicator();
   persistLocalCombatState();
+}
+
+function alivePlayerIds() {
+  const out = [];
+  if (!localDefeated) out.push(LOCAL_PLAYER_ID);
+  for (const [id, rp] of remotePlayers) {
+    if (!id || !rp || rp.defeated) continue;
+    out.push(id);
+  }
+  return out;
+}
+
+function handleMatchFinished(winnerId) {
+  if (matchEnded) return;
+  matchEnded = true;
+  matchWinnerPlayerId = winnerId || "";
+  const localWon = matchWinnerPlayerId === LOCAL_PLAYER_ID;
+  if (localWon) {
+    spectatorMode = false;
+    updateSpectatorIndicator();
+    if (watchMatchBtn) watchMatchBtn.hidden = true;
+    setDefeatOverlayVisible(
+      true,
+      "Felicidades, eres el ultimo astronauta con vida.",
+      "Victoria",
+      "victory"
+    );
+    setStatus("Victoria: eres el ganador de la partida.", true);
+    return;
+  }
+  if (spectatorMode || localDefeated) {
+    setStatus("Partida finalizada. Regresando al lobby...", null);
+    window.setTimeout(() => {
+      window.location.href = "index.html";
+    }, MATCH_END_REDIRECT_MS);
+  }
+}
+
+function checkForLastAstronautStanding() {
+  if (matchEnded) return;
+  const knownPlayers = 1 + remotePlayers.size;
+  if (knownPlayers < 2) return;
+  const alive = alivePlayerIds();
+  if (alive.length !== 1) return;
+  handleMatchFinished(alive[0]);
 }
 
 function createNameTagSprite(labelText, hitRatio = 0) {
@@ -2058,6 +2488,9 @@ function processBulletHits() {
         break;
       }
     }
+    if (!consumed && segmentIntersectsMapStructure(prevPos, currPos)) {
+      consumed = true;
+    }
     if (astroRoot && !localDefeated && ownerId !== LOCAL_PLAYER_ID) {
       if (segmentIntersectsAstronautRig(prevPos, currPos, astroRoot)) {
         const hitColorHex = bullet.userData?.colorHex ?? 0xffffff;
@@ -2199,10 +2632,14 @@ function tickMovement(dt) {
   updateDrinkPickup(nowMs);
   updateStarPickup(nowMs);
   updateBombPickup(nowMs);
+  ensureBonusPickupsSpawned();
+  updateBonusPickups(nowMs);
+  updateFirepitAmbienceSfx();
   tryConsumeMedkitLocal();
   tryConsumeDrinkLocal();
   tryConsumeStarLocal();
   tryConsumeBombLocal();
+  tryConsumeBonusPickupsLocal();
   tryAmmoboxRandomWeaponSwap(nowMs);
   updateLocalEffectTimer(nowMs);
   updateBullets(scene, activeBullets, dt);
@@ -2220,6 +2657,7 @@ function tickMovement(dt) {
     applyGun2RemoteTransform(rp.gun2Root, rp.gun2World, t, weaponRotationForType(rp.weaponType));
     refreshAstronautStain(rp.group, nowMs);
   });
+  checkForLastAstronautStanding();
 }
 
 function animate() {
@@ -2292,11 +2730,25 @@ function loadLocalModelsAndFinish(astroGroup) {
   scheduleNonCriticalLoad(loadBombTemplate, 500);
   scheduleNonCriticalLoad(loadPine2Template, 520);
   scheduleNonCriticalLoad(loadPine3Template, 580);
-  scheduleNonCriticalLoad(() => loadMapCabin({ scene, aniso, pathsFor }), 640);
-  scheduleNonCriticalLoad(() => loadMapCasa({ scene, aniso, pathsFor }), 700);
-  scheduleNonCriticalLoad(() => loadMapPuente({ scene, aniso, pathsFor }), 760);
-  scheduleNonCriticalLoad(() => loadMapAmmobox({ scene, aniso, pathsFor }), 820);
-  scheduleNonCriticalLoad(() => loadMapPozoAgua({ scene, aniso, pathsFor }), 880);
+  if (SELECTED_SEASON_KEY === "primavera") {
+    scheduleNonCriticalLoad(() => loadMapWoodhouse({ scene, aniso, pathsFor }), 640);
+  } else {
+    scheduleNonCriticalLoad(() => loadMapCabin({ scene, aniso, pathsFor }), 640);
+  }
+  if (SELECTED_SEASON_KEY === "invierno") {
+    scheduleNonCriticalLoad(() => loadMapIglu({ scene, aniso, pathsFor }), 700);
+  } else if (SELECTED_SEASON_KEY === "otono") {
+    scheduleNonCriticalLoad(() => loadMapTent({ scene, aniso, pathsFor }), 700);
+  } else {
+    scheduleNonCriticalLoad(() => loadMapCasa({ scene, aniso, pathsFor }), 700);
+  }
+  scheduleNonCriticalLoad(() => loadMapDumpster({ scene, aniso, pathsFor }), 740);
+  scheduleNonCriticalLoad(() => loadMapAmmobox({ scene, aniso, pathsFor }), 900);
+  scheduleNonCriticalLoad(() => loadMapPozoAgua({ scene, aniso, pathsFor }), 960);
+  if (SELECTED_SEASON_KEY === "invierno") {
+    scheduleNonCriticalLoad(() => loadMapFirepit({ scene, aniso, pathsFor }), 1020);
+    scheduleNonCriticalLoad(initFirepitAmbienceSfx, 1060);
+  }
 }
 
 function createFallbackMedkitTemplate() {
@@ -2351,10 +2803,12 @@ function loadMedkitTemplate() {
           medkitObj.scale.setScalar(0.18 * WORLD_GROUP_SCALE);
           medkitTemplate = medkitObj;
           spawnMedkitPickup();
+          ensureBonusPickupsSpawned();
         },
         () => {
           medkitTemplate = createFallbackMedkitTemplate();
           spawnMedkitPickup();
+          ensureBonusPickupsSpawned();
         }
       );
     },
@@ -2366,10 +2820,12 @@ function loadMedkitTemplate() {
           medkitObj.scale.setScalar(0.18 * WORLD_GROUP_SCALE);
           medkitTemplate = medkitObj;
           spawnMedkitPickup();
+          ensureBonusPickupsSpawned();
         },
         () => {
           medkitTemplate = createFallbackMedkitTemplate();
           spawnMedkitPickup();
+          ensureBonusPickupsSpawned();
         }
       );
     }
@@ -2388,6 +2844,7 @@ function loadDrinkTemplate() {
           drinkObj.scale.setScalar(0.008 * WORLD_GROUP_SCALE);
           drinkTemplate = drinkObj;
           spawnDrinkPickup();
+          ensureBonusPickupsSpawned();
         },
         () => {
           drinkTemplate = null;
@@ -2402,6 +2859,7 @@ function loadDrinkTemplate() {
           drinkObj.scale.setScalar(0.008 * WORLD_GROUP_SCALE);
           drinkTemplate = drinkObj;
           spawnDrinkPickup();
+          ensureBonusPickupsSpawned();
         },
         () => {
           drinkTemplate = null;
@@ -2431,7 +2889,7 @@ function applyStarMaterials(obj, texture) {
 }
 
 function loadStarTemplate() {
-  const starObjPaths = [...pathsFor("star/star.obj"), ...pathsFor("star/Shine Sprite.obj")];
+  const starObjPaths = pathsFor("star/star.obj");
   const starTexPaths = [...pathsFor("star/star.jpeg"), ...pathsFor("star/star.jpg")];
   loadTextureFirst(
     starTexPaths,
@@ -2444,6 +2902,7 @@ function loadStarTemplate() {
           starObj.scale.setScalar(0.05 * WORLD_GROUP_SCALE);
           starTemplate = starObj;
           spawnStarPickup();
+          ensureBonusPickupsSpawned();
         },
         () => {
           starTemplate = null;
@@ -2458,6 +2917,7 @@ function loadStarTemplate() {
           starObj.scale.setScalar(0.05 * WORLD_GROUP_SCALE);
           starTemplate = starObj;
           spawnStarPickup();
+          ensureBonusPickupsSpawned();
         },
         () => {
           starTemplate = null;
@@ -2487,6 +2947,7 @@ function loadBombTemplate() {
       bombObj.scale.setScalar(0.06 * WORLD_GROUP_SCALE);
       bombTemplate = bombObj;
       spawnBombPickup();
+      ensureBonusPickupsSpawned();
     },
     () => {
       bombTemplate = null;
@@ -2523,8 +2984,16 @@ function spawnPines() {
   if (!hasAnyTemplate) return;
   const group = new THREE.Group();
   group.name = "pines-group";
+  const clearNearIglu = SELECTED_SEASON_KEY === "invierno";
+  const igluClearRadius = 12.5;
+  const igluClearRadiusSq = igluClearRadius * igluClearRadius;
   // Decoración: no forman parte de `map-structure-collisions` (el avatar las puede atravesar).
   PINE_LAYOUT.forEach((cfg) => {
+    if (clearNearIglu) {
+      const dx = cfg.x - IGLU_CONFIG.x;
+      const dz = cfg.z - IGLU_CONFIG.z;
+      if (dx * dx + dz * dz <= igluClearRadiusSq) return;
+    }
     const template = cfg.model === "pine3" ? pine3Template : pine2Template;
     if (!template) return;
     const pine = template.clone(true);
@@ -2832,6 +3301,8 @@ function placeInScene(astroGroup, gun2) {
   localHits = 0;
   localDefeated = false;
   spectatorMode = false;
+  matchEnded = false;
+  matchWinnerPlayerId = "";
   localDamageSeq = 0;
   localShotSeq = 0;
   localLastHitColorHex = 0xffffff;
@@ -2859,6 +3330,10 @@ function placeInScene(astroGroup, gun2) {
   removeDrinkPickup();
   removeStarPickup();
   removeBombPickup();
+  for (let i = 0; i < bonusPickups.length; i += 1) {
+    if (bonusPickups[i]?.mesh) scene.remove(bonusPickups[i].mesh);
+  }
+  bonusPickups = [];
   const persistedState = loadPersistedLocalCombatState();
   if (persistedState) {
     localHits = persistedState.hits;
@@ -2875,6 +3350,7 @@ function placeInScene(astroGroup, gun2) {
     localWeaponType = normalizedWeaponType(INITIAL_WEAPON_QUERY || localWeaponType || "gun2");
   }
   setPlayerEliminatedVisual(astroRoot, false);
+  if (watchMatchBtn) watchMatchBtn.hidden = false;
   setDefeatOverlayVisible(false);
   updateNameTag(astroGroup, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
   if (localDefeated) {

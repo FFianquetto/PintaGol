@@ -33,12 +33,10 @@ import {
   registerPintagolZombieVistaHandler,
   registerPintagolPedirSyncListener,
   getPintagolSyncScene,
-  getPintagolMapLoadContext,
   getPintagolLocalPlayerId,
   sendPintagolVistaMessage,
   applyPintagolExternalLocalHit
 } from "../astro-sync.js";
-import { loadZombieModeDoor } from "../map/map-door-zombie.js";
 
 const _tmpBox = new THREE.Box3();
 const _tmpVecA = new THREE.Vector3();
@@ -91,17 +89,6 @@ function getReadyPlayerCount() {
 
 function countAlivePlayers() {
   return listPlayerGroups().filter(playerCanBeHit).length;
-}
-
-function scheduleZombieDoorLoad() {
-  const run = () => {
-    const ctx = getPintagolMapLoadContext();
-    if (ctx && ctx.scene) {
-      loadZombieModeDoor(ctx);
-    }
-  };
-  if (typeof window !== "undefined") window.setTimeout(run, 240);
-  else run();
 }
 
 function listPlayerGroups() {
@@ -751,7 +738,6 @@ export function initZombieCoopMode() {
   matchResult = "";
   hideEndOverlay();
   clearAllZombies();
-  scheduleZombieDoorLoad();
   unregBullet = registerPintagolSceneBulletHandler(onBulletZombieCoop);
   unregFrame = registerPintagolSceneFrameHandler(onFrameCoop);
   unregVista = registerPintagolZombieVistaHandler(onVistaZombieCoop);

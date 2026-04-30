@@ -185,6 +185,10 @@ html, body {
   pointer-events: auto;
 }
 
+.astro-defeat-card.victory {
+  background: linear-gradient(155deg, #14532d 0%, #15803d 52%, #22c55e 100%);
+}
+
 .astro-defeat-card h2 {
   margin-bottom: 0.45rem;
   font-family: "Permanent Marker", cursive, sans-serif;
