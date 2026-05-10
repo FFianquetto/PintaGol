@@ -379,7 +379,7 @@ function handleMetaAuthorize(req, res, channel) {
     channel
   });
   const scope = encodeURIComponent('email,public_profile');
-  const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(sec.id)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&response_type=code&scope=${scope}`;
+  const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(sec.id)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&response_type=code&scope=${scope}&auth_type=reauthenticate`;
   res.writeHead(302, { Location: url });
   res.end();
 }

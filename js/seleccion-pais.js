@@ -8,6 +8,21 @@
   var scene, camera, renderer, mapPlane;
   var selectedCountry = null;
   var SELECTED_PLAYER_KEY = 'pintagol_selected_player';
+  /** Nombre mostrado de Meta (misma clave que redes-sociales.js). */
+  var LS_META_NAME = 'pintagol_meta_name';
+
+  function getMetaNameForPlayerField() {
+    try {
+      var n = window.localStorage.getItem(LS_META_NAME);
+      if (!n) return '';
+      n = String(n).trim();
+      if (!n) return '';
+      if (n.length > 20) n = n.slice(0, 20);
+      return n;
+    } catch (e) {
+      return '';
+    }
+  }
 
   function createMapTexture() {
     var w = 1024, h = 512;
@@ -209,13 +224,14 @@
   function init() {
     initScene();
     initButtons();
+    var nameInput = document.getElementById('player-name-input');
+    var metaName = getMetaNameForPlayerField();
     try {
       var cached = JSON.parse(window.sessionStorage.getItem(SELECTED_PLAYER_KEY) || 'null');
       if (cached && cached.key && cached.label) {
         selectedCountry = { key: cached.key, label: cached.label };
-        var input = document.getElementById('player-name-input');
-        if (input && cached.name) {
-          input.value = cached.name;
+        if (nameInput) {
+          nameInput.value = metaName || (cached.name ? cached.name : '');
         }
         setBuscarPartidaEnabled(canSearch());
         return;
@@ -223,7 +239,10 @@
     } catch (error) {
       // Ignorar sesión inválida y continuar normal.
     }
-    setBuscarPartidaEnabled(false);
+    if (nameInput && metaName) {
+      nameInput.value = metaName;
+    }
+    setBuscarPartidaEnabled(canSearch());
   }
 
   if (document.readyState === 'loading') {

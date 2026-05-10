@@ -1,8 +1,8 @@
 /**
- * Solo en local: al abrir el lobby se borran flags de vinculación Meta en el navegador
- * y se llama a FB.logout para que el siguiente FB.login no proponga siempre la misma cuenta.
+ * Solo en local: al abrir el lobby se reinicia la sesión del SDK Meta y los flags UI de FB/IG.
+ * Conserva pintagol_meta_user_id y pintagol_meta_name para que las victorias (score-win) sigan ligadas a la cuenta.
  * No borra el correo de referencia (pintagol_redes_email).
- * Si acabas de vincular (sessionStorage pintagol_lobby_redes_ok), no hace nada para no anular el retorno exitoso.
+ * Si acabas de vincular (sessionStorage pintagol_lobby_redes_ok), no hace nada.
  */
 (function () {
   'use strict';
@@ -16,14 +16,10 @@
 
   var LS_FB = 'pintagol_redes_facebook_ok';
   var LS_IG = 'pintagol_redes_instagram_ok';
-  var LS_UID = 'pintagol_meta_user_id';
-  var LS_NAME = 'pintagol_meta_name';
 
   try {
     localStorage.removeItem(LS_FB);
     localStorage.removeItem(LS_IG);
-    localStorage.removeItem(LS_UID);
-    localStorage.removeItem(LS_NAME);
   } catch (e) {}
 
   fetch('/api/redes/meta-app-id')

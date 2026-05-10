@@ -4,6 +4,20 @@
   var scene, camera, renderer;
   var selectedWeapon = null;
   var ZOMBIE_PLAYER_KEY = 'pintagol_zombie_selected_player';
+  var LS_META_NAME = 'pintagol_meta_name';
+
+  function getMetaNameForPlayerField() {
+    try {
+      var n = window.localStorage.getItem(LS_META_NAME);
+      if (!n) return '';
+      n = String(n).trim();
+      if (!n) return '';
+      if (n.length > 20) n = n.slice(0, 20);
+      return n;
+    } catch (e) {
+      return '';
+    }
+  }
 
   function initScene() {
     var canvasEl = document.getElementById('zombie-canvas');
@@ -109,6 +123,7 @@
       });
     }
 
+    var metaName = getMetaNameForPlayerField();
     try {
       var cached = JSON.parse(window.sessionStorage.getItem(ZOMBIE_PLAYER_KEY) || 'null');
       if (cached && cached.weapon && cached.weaponLabel) {
@@ -120,10 +135,15 @@
         });
         var msg = document.getElementById('zombie-weapon-msg');
         if (msg) msg.textContent = 'Arma elegida: ' + cached.weaponLabel;
-        if (nameInput && cached.name) nameInput.value = cached.name;
+        if (nameInput) {
+          nameInput.value = metaName || (cached.name ? cached.name : '');
+        }
       }
     } catch (_error) {}
 
+    if (nameInput && metaName && !nameInput.value.trim()) {
+      nameInput.value = metaName;
+    }
     setBuscarEnabled(canSearch());
   }
 

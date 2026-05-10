@@ -284,7 +284,10 @@
         }
         enviarTokenAlServidor(response.authResponse.accessToken, channel);
       },
-      { scope: 'email,public_profile' }
+      {
+        scope: 'email,public_profile',
+        auth_type: 'reauthenticate'
+      }
     );
   }
 
