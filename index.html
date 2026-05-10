@@ -21,6 +21,11 @@
         <span class="title-gol">Gol</span>
       </h1>
 
+      <div id="lobby-redes-toast" role="status" aria-live="polite" hidden>
+        <p id="lobby-redes-toast-msg"></p>
+        <button type="button" id="lobby-redes-toast-close" aria-label="Cerrar aviso">×</button>
+      </div>
+
       <nav id="lobby-buttons">
         <button type="button" class="lobby-btn btn-crear" data-action="redes-sociales">Redes sociales</button>
         <button type="button" class="lobby-btn btn-buscar" data-action="buscar-partida">Buscar Partida</button>
@@ -32,6 +37,7 @@
   </div>
 
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/lobby-meta-session-reset.js"></script>
   <script src="js/lobby.js"></script>
   <script src="js/background-music.js"></script>
 </body>

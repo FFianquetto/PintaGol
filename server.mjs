@@ -64,7 +64,7 @@ function upsertOAuthUser(db, userId, email, name, channel) {
 }
 
 function getLeaderboard(db, limit = 50) {
-  const rows = Object.values(db.users).filter((x) => x && x.linkedFacebook && x.linkedInstagram);
+  const rows = Object.values(db.users).filter((x) => x && x.linkedFacebook);
   rows.sort((a, b) => (b.wins || 0) - (a.wins || 0));
   return rows.slice(0, limit).map((r, i) => ({
     rank: i + 1,
@@ -78,7 +78,7 @@ function incrementWin(db, userId) {
   const id = String(userId || '').trim();
   if (!id || !db.users[id]) return { ok: false, reason: 'unknown_user' };
   const u = db.users[id];
-  if (!u.linkedFacebook || !u.linkedInstagram) return { ok: false, reason: 'not_fully_linked' };
+  if (!u.linkedFacebook) return { ok: false, reason: 'not_linked_facebook' };
   u.wins = (u.wins || 0) + 1;
   u.updatedAt = new Date().toISOString();
   saveScoresDb(db);
@@ -175,6 +175,37 @@ function handleVerifySdkToken(req, res) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, message: 'Meta no devolvió id de usuario.' }));
         return;
+      }
+      const expectedRaw =
+        body && body.expectedEmail != null ? String(body.expectedEmail).trim().toLowerCase() : '';
+      const metaEmailNorm = String(email).trim().toLowerCase();
+      if (expectedRaw) {
+        if (!metaEmailNorm) {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(
+            JSON.stringify({
+              ok: false,
+              reason: 'no_email',
+              message:
+                'Meta no devolvió correo. Concede el permiso email y comprueba la cuenta de Facebook.'
+            })
+          );
+          return;
+        }
+        if (metaEmailNorm !== expectedRaw) {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(
+            JSON.stringify({
+              ok: false,
+              reason: 'email_mismatch',
+              message:
+                'La cuenta de Facebook con la que entraste usa otro correo que el guardado en Pinta Gol.',
+              metaEmail: email,
+              expectedEmail: body.expectedEmail ? String(body.expectedEmail).trim() : ''
+            })
+          );
+          return;
+        }
       }
       const db = loadScoresDb();
       upsertOAuthUser(db, userId, email, displayName, channel);

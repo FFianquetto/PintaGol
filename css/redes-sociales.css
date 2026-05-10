@@ -164,15 +164,15 @@ input:focus {
   word-break: break-word;
 }
 
-#estado-sesion .ok {
+#estado-sesion.ok {
   color: #86efac;
 }
 
-#estado-sesion .aviso {
+#estado-sesion.aviso {
   color: #fde68a;
 }
 
-#estado-sesion .err {
+#estado-sesion.err {
   color: #fca5a5;
 }
 

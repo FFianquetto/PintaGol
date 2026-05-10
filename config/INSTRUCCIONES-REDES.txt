@@ -53,7 +53,7 @@ No uses solo `npx serve` u otro servidor estático: no existen las rutas /api ni
 ────────────────────────────────────────
 4) Ranking (Puntuaciones)
 ────────────────────────────────────────
-  • Solo aparecen jugadores que han vinculado AMBAS redes (Facebook e Instagram) en esta app.
+  • En puntuaciones aparecen jugadores que han vinculado Facebook en esta app (Instagram sigue opcional para marcar el canal en redes).
 
   • Cada victoria suma 1 si ganaste la partida:
       - Batalla (astro-sync): último astronauta en pie.

@@ -112,7 +112,7 @@
     if (!rows || !rows.length) {
       var tr = document.createElement('tr');
       tr.innerHTML =
-        '<td colspan="3" class="tabla-msg">Aún no hay jugadores en el ranking. Vincula Facebook e Instagram en Redes sociales y gana partidas.</td>';
+        '<td colspan="3" class="tabla-msg">Aún no hay jugadores en el ranking. Vincula Facebook en Redes sociales y gana partidas.</td>';
       tbody.appendChild(tr);
       return;
     }

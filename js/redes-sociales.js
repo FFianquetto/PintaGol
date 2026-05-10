@@ -47,6 +47,30 @@
     } catch (e) {}
   }
 
+  /** Quita solo flags Meta/Facebook en localStorage (no el correo). Tras cambiar correo o cerrar sesión en Meta. */
+  function resetMetaLinkLocalOnly() {
+    try {
+      localStorage.removeItem(LS_FB);
+      localStorage.removeItem(LS_IG);
+      localStorage.removeItem(LS_UID);
+      localStorage.removeItem(LS_NAME);
+    } catch (e) {}
+  }
+
+  function logoutFacebookSdk(done) {
+    if (typeof FB === 'undefined' || !FB.logout) {
+      if (done) done();
+      return;
+    }
+    try {
+      FB.logout(function () {
+        if (done) done();
+      });
+    } catch (e) {
+      if (done) done();
+    }
+  }
+
   function yaVinculadoFacebook() {
     try {
       return localStorage.getItem(LS_FB) === '1';
@@ -69,10 +93,44 @@
     estado.textContent = texto;
   }
 
+  function correoEnInputValido() {
+    var v = (emailInp && emailInp.value && emailInp.value.trim()) || '';
+    return v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  }
+
+  /** El correo del campo coincide con el guardado en localStorage (tras Guardar). */
+  function correoGuardadoCoincideConInput() {
+    var inp = (emailInp && emailInp.value.trim()) || '';
+    var st = getStoredEmail();
+    if (!inp || !st) return false;
+    return inp.toLowerCase() === st.toLowerCase();
+  }
+
+  /** Si el usuario escribe otro correo distinto al guardado, no pisar el campo al sincronizar. */
+  function usuarioEditandoCorreoDistintoAlGuardado() {
+    if (!emailInp) return false;
+    var typed = emailInp.value.trim();
+    if (!typed) return false;
+    var st = getStoredEmail();
+    if (!st) return true;
+    return typed.toLowerCase() !== st.toLowerCase();
+  }
+
   function refrescarTextoVinculacion() {
     var em = getStoredEmail();
+    if (!em && !correoEnInputValido()) {
+      setEstado('Escribe un correo y pulsa «Guardar correo» para habilitar los enlaces.', 'ok');
+      return;
+    }
+    if (usuarioEditandoCorreoDistintoAlGuardado()) {
+      setEstado(
+        'Has cambiado el correo en el campo. Pulsa «Guardar correo» para usar este email con Meta.',
+        'aviso'
+      );
+      return;
+    }
     if (!em) {
-      setEstado('Guarda un correo para habilitar los enlaces.', 'ok');
+      setEstado('Guarda un correo válido con el botón verde.', 'ok');
       return;
     }
     var uid = '';
@@ -88,7 +146,7 @@
   }
 
   function actualizarBotonesVincular() {
-    var ok = !!getStoredEmail() && fbSdkReady && !!metaAppId;
+    var ok = correoGuardadoCoincideConInput() && fbSdkReady && !!metaAppId;
     if (btnFb) btnFb.disabled = !ok;
     if (btnIg) btnIg.disabled = !ok;
     if (btnLogout) btnLogout.hidden = !getStoredEmail();
@@ -142,19 +200,53 @@
         '.'
     );
     refrescarTextoVinculacion();
+    try {
+      sessionStorage.setItem(
+        'pintagol_lobby_redes_ok',
+        JSON.stringify({
+          name: data.name ? String(data.name) : '',
+          channel: channelLabel
+        })
+      );
+    } catch (e2) {}
+    window.location.href = 'index.html';
   }
 
   function enviarTokenAlServidor(accessToken, channel) {
     fetch('/api/redes/verify-sdk-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken: accessToken, channel: channel })
+      body: JSON.stringify({
+        accessToken: accessToken,
+        channel: channel,
+        expectedEmail: getStoredEmail()
+      })
     })
       .then(function (r) {
         return r.json();
       })
       .then(function (data) {
         if (!data || !data.ok) {
+          if (data && data.reason === 'email_mismatch') {
+            setEstado(
+              'Facebook devolvió otro correo (' +
+                (data.metaEmail || '?') +
+                '). Guarda en Pinta Gol el mismo correo que esa cuenta de Meta, o en la ventana de Meta pulsa Cancelar y entra con la cuenta correcta.',
+              'err'
+            );
+            log(
+              'Correo Meta distinto al guardado. Meta: ' +
+                (data.metaEmail || '') +
+                ' · guardado: ' +
+                (data.expectedEmail || getStoredEmail())
+            );
+            return;
+          }
+          if (data && data.reason === 'no_email') {
+            setEstado((data && data.message) || 'Meta no devolvió correo.', 'err');
+            log((data && data.message) || '');
+            return;
+          }
           log((data && data.message) || 'Error al registrar en el servidor.');
           return;
         }
@@ -167,10 +259,23 @@
 
   function loginSdkYRegistrar(channel) {
     if (!getStoredEmail()) return;
+    if (!correoGuardadoCoincideConInput()) {
+      log('Pulsa «Guardar correo» para fijar el email que debe coincidir con tu cuenta de Meta.');
+      return;
+    }
     if (typeof FB === 'undefined' || !fbSdkReady) {
       log('SDK de Meta no listo. Espera un momento y reintenta.');
       return;
     }
+    /**
+     * No encadenar FB.logout → esperar → FB.login: el callback de logout a veces no se ejecuta
+     * y el login nunca abre; además el retraso hace que el navegador bloquee el popup del login.
+     * logout en segundo plano + login en el mismo clic mantiene el popup permitido.
+     */
+    try {
+      FB.logout(function () {});
+    } catch (e) {}
+    log('Abriendo ventana de Meta (si no ves popup, permite ventanas emergentes para localhost).');
     FB.login(
       function (response) {
         if (!response.authResponse || !response.authResponse.accessToken) {
@@ -179,7 +284,7 @@
         }
         enviarTokenAlServidor(response.authResponse.accessToken, channel);
       },
-      { scope: 'email,public_profile', auth_type: 'rerequest' }
+      { scope: 'email,public_profile' }
     );
   }
 
@@ -211,9 +316,19 @@
     }
   }
 
-  function syncFormularioDesdeStorage() {
+  /**
+   * @param {{ alwaysApplyEmail?: boolean }} opts - Si true, el input copia siempre localStorage (tras Guardar/Cerrar sesión).
+   */
+  function syncFormularioDesdeStorage(opts) {
+    opts = opts || {};
     var em = getStoredEmail();
-    if (emailInp && em) emailInp.value = em;
+    if (emailInp) {
+      if (opts.alwaysApplyEmail) {
+        emailInp.value = em || '';
+      } else if (!usuarioEditandoCorreoDistintoAlGuardado()) {
+        emailInp.value = em || '';
+      }
+    }
     actualizarBotonesVincular();
     refrescarTextoVinculacion();
   }
@@ -246,6 +361,13 @@
     syncFormularioDesdeStorage();
   });
 
+  if (emailInp) {
+    emailInp.addEventListener('input', function () {
+      actualizarBotonesVincular();
+      refrescarTextoVinculacion();
+    });
+  }
+
   if (btnGuardar) {
     btnGuardar.addEventListener('click', function () {
       var e = (emailInp && emailInp.value && emailInp.value.trim()) || '';
@@ -253,29 +375,38 @@
         log('Introduce un correo válido.');
         return;
       }
+      var anterior = getStoredEmail();
+      var nuevoNorm = e.toLowerCase();
+      var cambioCorreo =
+        anterior && anterior.toLowerCase().trim() !== nuevoNorm;
+
       setStoredEmail(e);
+
+      if (cambioCorreo) {
+        resetMetaLinkLocalOnly();
+        log(
+          'Correo actualizado. Se reinició la vinculación anterior y la sesión de Meta en esta página.'
+        );
+        logoutFacebookSdk(function () {
+          log('Puedes pulsar Facebook o Instagram con la cuenta que use este correo.');
+          syncFormularioDesdeStorage({ alwaysApplyEmail: true });
+        });
+        return;
+      }
+
       log('Correo guardado. Con el SDK de Meta puedes vincular Facebook e Instagram.');
-      syncFormularioDesdeStorage();
+      syncFormularioDesdeStorage({ alwaysApplyEmail: true });
     });
   }
 
   if (btnLogout) {
     btnLogout.addEventListener('click', function () {
-      try {
-        if (typeof FB !== 'undefined' && FB.logout) {
-          FB.logout(function () {});
-        }
-      } catch (e) {}
+      resetMetaLinkLocalOnly();
+      logoutFacebookSdk(function () {});
       setStoredEmail('');
-      try {
-        localStorage.removeItem(LS_FB);
-        localStorage.removeItem(LS_IG);
-        localStorage.removeItem(LS_UID);
-        localStorage.removeItem(LS_NAME);
-      } catch (e2) {}
       if (emailInp) emailInp.value = '';
-      log('Sesión local borrada.');
-      syncFormularioDesdeStorage();
+      log('Sesión local borrada y Facebook desconectado en esta app.');
+      syncFormularioDesdeStorage({ alwaysApplyEmail: true });
     });
   }
 

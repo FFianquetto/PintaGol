@@ -158,7 +158,50 @@
       btn.addEventListener('click', onLobbyButtonClick);
     });
 
+    mostrarToastVinculoMetaSiHay();
+
     animate();
+  }
+
+  function mostrarToastVinculoMetaSiHay() {
+    var toast = document.getElementById('lobby-redes-toast');
+    var msgEl = document.getElementById('lobby-redes-toast-msg');
+    var closeBtn = document.getElementById('lobby-redes-toast-close');
+    if (!toast || !msgEl) return;
+
+    var KEY = 'pintagol_lobby_redes_ok';
+    var raw = '';
+    try {
+      raw = sessionStorage.getItem(KEY);
+      if (raw) sessionStorage.removeItem(KEY);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+
+    var o = null;
+    try {
+      o = JSON.parse(raw);
+    } catch (e2) {
+      return;
+    }
+    if (!o || typeof o !== 'object') return;
+
+    var red = o.channel === 'instagram' ? 'Instagram' : 'Facebook';
+    var nombre = (o.name && String(o.name).trim()) || '';
+    var texto = nombre
+      ? '¡Listo! Vinculaste ' + red + ' · ' + nombre
+      : '¡Listo! Vinculaste ' + red + ' correctamente.';
+    msgEl.textContent = texto;
+    toast.removeAttribute('hidden');
+
+    function cerrar() {
+      toast.setAttribute('hidden', '');
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener('click', cerrar);
+    }
+    setTimeout(cerrar, 12000);
   }
 
   function onResize() {
