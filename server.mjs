@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
@@ -5,11 +6,21 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
+import { createMysqlPool } from './db/mysql-pool.mjs';
+import { createJugadoresRepo } from './db/jugadores-repo.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 3333;
 const pendingMetaOauth = new Map();
+
+const mysqlPool = createMysqlPool();
+const jugadoresRepo = mysqlPool ? createJugadoresRepo(mysqlPool) : null;
+if (jugadoresRepo) {
+  console.log('[scores] MySQL: tabla jugadores (MYSQL_HOST=' + process.env.MYSQL_HOST + ')');
+} else {
+  console.log('[scores] JSON local: data/scores-meta.json (define MYSQL_HOST para usar MySQL)');
+}
 
 const DATA_DIR = path.join(ROOT, 'data');
 const SCORES_DB_PATH = path.join(DATA_DIR, 'scores-meta.json');
@@ -83,6 +94,20 @@ function incrementWin(db, userId) {
   u.updatedAt = new Date().toISOString();
   saveScoresDb(db);
   return { ok: true, wins: u.wins };
+}
+
+/**
+ * Tras login Meta/Facebook válido (antes de volver al menú): INSERT/UPDATE en tabla `jugadores`
+ * si MYSQL_* está configurado; si no, persiste en data/scores-meta.json.
+ * @param {'facebook'|'instagram'} channel
+ */
+async function guardarJugadorTrasLoginMeta(userId, email, displayName, channel) {
+  if (jugadoresRepo) {
+    await jugadoresRepo.upsertOAuthUser(userId, email, displayName, channel);
+    return;
+  }
+  const db = loadScoresDb();
+  upsertOAuthUser(db, userId, email, displayName, channel);
 }
 
 function readJsonBody(req, maxLen = 65536) {
@@ -207,8 +232,20 @@ function handleVerifySdkToken(req, res) {
           return;
         }
       }
-      const db = loadScoresDb();
-      upsertOAuthUser(db, userId, email, displayName, channel);
+      try {
+        await guardarJugadorTrasLoginMeta(userId, email, displayName, channel);
+      } catch (err) {
+        console.error('[jugadores] MySQL:', err && err.message ? err.message : err);
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            message:
+              'No se pudo guardar el jugador en MySQL. Revisa .env, que exista la tabla jugadores y que el servidor MySQL esté en marcha.'
+          })
+        );
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(
         JSON.stringify({
@@ -503,8 +540,25 @@ function handleMetaCallback(req, res, u) {
       );
       return;
     }
-    const db = loadScoresDb();
-    upsertOAuthUser(db, userId, email, displayName, oauthChannel);
+    try {
+      await guardarJugadorTrasLoginMeta(userId, email, displayName, oauthChannel);
+    } catch (err) {
+      console.error('[jugadores] MySQL (OAuth):', err && err.message ? err.message : err);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        buildPostMessageHtml(
+          {
+            ok: false,
+            message:
+              'No se pudo guardar en MySQL. Revisa la base de datos y la tabla jugadores.',
+            email: '',
+            channel: oauthChannel
+          },
+          targetOrigin
+        )
+      );
+      return;
+    }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(
       buildPostMessageHtml(
@@ -519,17 +573,35 @@ const server = http.createServer((req, res) => {
   try {
     const u = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     if (u.pathname === '/api/scores' && req.method === 'GET') {
-      const db = loadScoresDb();
-      const leaderboard = getLeaderboard(db);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ leaderboard }));
+      if (jugadoresRepo) {
+        jugadoresRepo
+          .getLeaderboard(50)
+          .then((leaderboard) => {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ leaderboard }));
+          })
+          .catch(() => {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ leaderboard: [], error: 'mysql' }));
+          });
+      } else {
+        const db = loadScoresDb();
+        const leaderboard = getLeaderboard(db);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ leaderboard }));
+      }
       return;
     }
     if (u.pathname === '/api/scores/win' && req.method === 'POST') {
       readJsonBody(req)
-        .then((body) => {
-          const db = loadScoresDb();
-          const out = incrementWin(db, body && body.userId);
+        .then(async (body) => {
+          let out;
+          if (jugadoresRepo) {
+            out = await jugadoresRepo.incrementWin(body && body.userId);
+          } else {
+            const db = loadScoresDb();
+            out = incrementWin(db, body && body.userId);
+          }
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(out));
         })
@@ -620,4 +692,14 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
   console.log('Servidor listo: http://localhost:' + PORT + '/');
   console.log('WebSocket: ws://localhost:' + PORT + '/ws');
+  if (mysqlPool) {
+    mysqlPool
+      .query('SELECT 1')
+      .then(() =>
+        console.log('[mysql] Conexión OK — los logins de Facebook escriben en la tabla jugadores.')
+      )
+      .catch((err) =>
+        console.error('[mysql] Error de conexión:', err && err.message ? err.message : err)
+      );
+  }
 });

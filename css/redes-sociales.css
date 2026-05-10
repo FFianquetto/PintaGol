@@ -30,13 +30,6 @@ html, body {
   letter-spacing: 0.04em;
 }
 
-#redes-header p {
-  margin-top: 0.5rem;
-  font-size: 0.95rem;
-  opacity: 0.9;
-  line-height: 1.45;
-}
-
 #aviso-config {
   display: none;
   background: rgba(180, 83, 9, 0.25);
@@ -154,18 +147,6 @@ input:focus {
   background: linear-gradient(155deg, #1877f2 0%, #0a58c4 100%);
 }
 
-.btn-instagram {
-  background: linear-gradient(145deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-}
-
-.meta-help {
-  margin-top: 0.85rem;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  opacity: 0.88;
-  color: #bae6fd;
-}
-
 #estado-sesion {
   font-size: 0.9rem;
   line-height: 1.5;
@@ -205,10 +186,3 @@ input:focus {
   transform: scale(1.02);
 }
 
-#log-lineas {
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  opacity: 0.75;
-  max-height: 6em;
-  overflow: auto;
-}

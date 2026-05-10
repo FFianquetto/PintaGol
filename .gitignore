@@ -1,3 +1,4 @@
 node_modules/
+.env
 redes-secrets.json
 data/scores-meta.json

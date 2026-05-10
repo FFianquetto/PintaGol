@@ -14,7 +14,6 @@
   <div id="redes-container">
     <header id="redes-header">
       <h1>Redes sociales</h1>
-      <p>Correo de referencia + SDK JavaScript de Meta (<code>FB.login</code>): el servidor registra tu cuenta por <strong>ID de Graph API</strong> y valida el token. Mismo email que en Meta.</p>
     </header>
 
     <div id="aviso-config" role="status"></div>
@@ -30,17 +29,11 @@
     </section>
 
     <section class="panel" id="panel-vincular">
-      <h2>Vincular con Meta (Facebook / Instagram)</h2>
-      <p id="estado-sesion" class="ok">Escribe tu correo y pulsa «Guardar correo» para activar Facebook e Instagram (debe ser el mismo correo que tiene tu cuenta de Facebook). Tras iniciar sesión, el servidor comprueba que coincida.</p>
+      <h2>Vincular con Facebook</h2>
+      <p id="estado-sesion" class="ok" aria-live="polite"></p>
       <div class="fila-btns" style="margin-top:0.75rem">
         <button type="button" class="btn btn-facebook" id="btn-facebook" disabled>Facebook</button>
-        <button type="button" class="btn btn-instagram" id="btn-instagram" disabled>Instagram</button>
       </div>
-      <p class="meta-help">
-        Meta usa la sesión de <strong>facebook.com</strong> en este navegador (vale también para Instagram si tu cuenta está enlazada en Meta).
-        El correo que guardas aquí se comprueba después del login. Si aparece otra persona, pulsa <strong>Cancelar</strong> y «¿No eres tú?».
-      </p>
-      <p id="log-lineas" aria-live="polite"></p>
     </section>
 
     <button type="button" id="btn-volver">Volver al lobby</button>
