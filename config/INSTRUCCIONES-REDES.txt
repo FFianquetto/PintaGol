@@ -1,24 +1,70 @@
-Redes sociales (Firebase + Meta)
+Redes sociales y ranking (Meta)
 
-1) Firebase
-   - Crea un proyecto en https://console.firebase.google.com
-   - Authentication: habilita "Correo/contraseña" y "Facebook"
-   - Para Facebook en Firebase, necesitas un App ID de Meta (mismo que en el paso 2)
-   - Pega la configuración web en config/firebase.config.js
+IMPORTANTE: usa el servidor del proyecto para OAuth y para el ranking.
 
-2) Facebook / Meta (mismo ID que uses en Firebase para "Facebook" en Auth)
-   - https://developers.facebook.com → Crear app → p. ej. consumidor
-   - Producto: Inicio de sesión con Facebook. URI de redirección OAuth válida:
-     http://localhost:3333/oauth/meta/callback
-     (Si abres con 127.0.0.1:3333, añade también http://127.0.0.1:3333/oauth/meta/callback. Ajusta el puerto a PORT o env.)
-   - Crea "redes-secrets.json" en la raíz (plantilla: redes-secrets.example.json):
-     { "metaAppId": "…", "metaAppSecret": "…" }
+  npm start
+  Abre http://localhost:3333/ (puerto = PORT o 3333)
 
-3) Instagram
-   - El botón "Instagram" usa inicio con Facebook/Graph: obtenemos el email de
-     Meta y lo cotejamos con el correo con el que iniciaste en Pinta Gol. No
-     incluimos Twitter, como acordado.
+No uses solo `npx serve` u otro servidor estático: no existen las rutas /api ni OAuth.
 
-4) Inicio
-   - npm start
-   - En el lobby: "Redes sociales" → registro/inicio con correo → vincular Facebook/Instagram
+────────────────────────────────────────
+1) App en Meta (developers.facebook.com)
+────────────────────────────────────────
+  • https://developers.facebook.com → Crear app.
+
+  • Producto "Inicio de sesión con Facebook":
+    Configuración → URI de redirección de OAuth válidas (exactas):
+      http://localhost:3333/oauth/meta/callback
+    Repite con tu puerto si cambias PORT. Si entras con 127.0.0.1, añade también:
+      http://127.0.0.1:3333/oauth/meta/callback
+
+  • Copia App ID y App Secret (Configuración de la app → Básico).
+
+  • Permisos: para email y nombre se usan email y public_profile en el diálogo OAuth.
+
+  • Modo desarrollo: solo cuentas de prueba / administradores pueden autorizar hasta pasar revisión y publicar la app.
+
+────────────────────────────────────────
+2) Credenciales locales
+────────────────────────────────────────
+  • Copia redes-secrets.example.json → redes-secrets.json en la raíz del proyecto.
+
+  • Edita:
+      { "metaAppId": "TU_APP_ID", "metaAppSecret": "TU_SECRET" }
+
+  • redes-secrets.json no debe subirse a git (está en .gitignore).
+
+────────────────────────────────────────
+3) SDK JavaScript de Meta en Redes sociales
+────────────────────────────────────────
+  • La página carga el SDK (connect.facebook.net) y usa FB.init con el mismo App ID que redes-secrets.json
+    (el navegador lo obtiene de GET /api/redes/meta-app-id; no pongas el App Secret en el cliente).
+
+  • En la app Meta, en Configuración → Básico:
+    - URL del sitio: http://localhost:3333/ (ajusta puerto si usas PORT)
+
+  • Botones Facebook / Instagram: FB.login con permisos email y public_profile; el accessToken se envía a
+    POST /api/redes/verify-sdk-token. El servidor valida el token con Graph debug_token y luego llama a
+    /me?fields=id,name,email. El usuario queda guardado por id de Graph API (campo "id").
+
+  • Instagram (consumidor): suele usarse el mismo inicio con Facebook; el segundo botón marca el canal
+    "instagram" en el servidor para exigir ambas vinculaciones en el ranking.
+
+────────────────────────────────────────
+4) Ranking (Puntuaciones)
+────────────────────────────────────────
+  • Solo aparecen jugadores que han vinculado AMBAS redes (Facebook e Instagram) en esta app.
+
+  • Cada victoria suma 1 si ganaste la partida:
+      - Batalla (astro-sync): último astronauta en pie.
+      - Modo zombie cooperativo: oleadas completadas con victoria.
+
+  • Los datos se guardan en el servidor en data/scores-meta.json (generado automáticamente; en .gitignore).
+
+────────────────────────────────────────
+5) Consumir más datos de Meta (opcional)
+────────────────────────────────────────
+  • Facebook / páginas: Graph API según permisos y revisión de la app.
+  • Instagram profesional: Instagram Graph API (cuenta Business/Creator + página de Facebook).
+
+  Documentación: https://developers.facebook.com/docs/graph-api

@@ -1813,6 +1813,13 @@ function handleMatchFinished(winnerId) {
       "victory"
     );
     setStatus("Victoria: eres el ganador de la partida.", true);
+    if (
+      typeof window !== "undefined" &&
+      window.PintaGolScoreWin &&
+      typeof window.PintaGolScoreWin.report === "function"
+    ) {
+      window.PintaGolScoreWin.report();
+    }
     return;
   }
   if (spectatorMode || localDefeated) {

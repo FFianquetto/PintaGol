@@ -66,6 +66,37 @@ html, body {
   letter-spacing: 0.06em;
 }
 
+.puntuaciones-subtitle {
+  font-size: 0.82rem;
+  color: #bae6fd;
+  text-align: center;
+  margin: -0.5rem 0 1rem;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+
+.puntuaciones-subtitle code {
+  font-size: 0.85em;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.tabla-msg {
+  text-align: center;
+  color: #93c5fd;
+  font-size: 0.92rem;
+  padding: 1rem 0.5rem !important;
+}
+
+.tabla-msg.err {
+  color: #fca5a5;
+}
+
+.tabla-msg code {
+  font-size: 0.85em;
+}
+
 #tabla-puntuaciones {
   width: 100%;
   border-collapse: collapse;
@@ -83,7 +114,7 @@ html, body {
 
 #tabla-puntuaciones .col-rango { width: 20%; }
 #tabla-puntuaciones .col-jugador { width: 55%; }
-#tabla-puntuaciones .col-puntos { width: 25%; text-align: right; }
+#tabla-puntuaciones .col-victorias { width: 25%; text-align: right; }
 
 #tabla-puntuaciones tbody td {
   font-size: 0.95rem;

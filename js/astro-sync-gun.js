@@ -32,6 +32,7 @@ export function applyGun2LocalTransform(gun2Root, gun2World, t, baseRotation) {
   applyGun2Transform(gun2Root, gun2World, t, baseRotation);
 }
 
+
 export function applyGun2RemoteTransform(gun2Root, gun2World, t, baseRotation) {
   applyGun2Transform(gun2Root, gun2World, t, baseRotation);
 }

@@ -62,6 +62,19 @@ let knownAuthorityId = "";
 let coopPhase = PHASE_WAITING_PLAYERS;
 let countdownEndAtMs = 0;
 let matchResult = ""; // "", "victory", "defeat"
+let coopScoreReported = false;
+
+function reportCoopVictoryToLeaderboard() {
+  if (coopScoreReported) return;
+  coopScoreReported = true;
+  if (
+    typeof window !== "undefined" &&
+    window.PintaGolScoreWin &&
+    typeof window.PintaGolScoreWin.report === "function"
+  ) {
+    window.PintaGolScoreWin.report();
+  }
+}
 
 function pathsFor(rel) {
   return MODEL_BASES.map((base) => base + rel);
@@ -462,6 +475,7 @@ function handleZombieKilled(zombie) {
     coopFinished = true;
     matchResult = "victory";
     showEndOverlay(matchResult);
+    reportCoopVictoryToLeaderboard();
     setHudStatus("Modo zombie cooperativo completado. Oleadas terminadas.");
     broadcastSnapshotNow();
     return;
@@ -596,6 +610,7 @@ function applyRemoteSnapshot(snapshot) {
     if (matchResult === "victory") {
       setHudStatus("Victoria: oleadas completadas.");
       showEndOverlay("victory");
+      reportCoopVictoryToLeaderboard();
     } else if (matchResult === "defeat") {
       setHudStatus("Derrota: todos los jugadores cayeron.");
       showEndOverlay("defeat");
@@ -736,6 +751,7 @@ export function initZombieCoopMode() {
   coopPhase = PHASE_WAITING_PLAYERS;
   countdownEndAtMs = 0;
   matchResult = "";
+  coopScoreReported = false;
   hideEndOverlay();
   clearAllZombies();
   unregBullet = registerPintagolSceneBulletHandler(onBulletZombieCoop);

@@ -168,7 +168,7 @@ html, body {
   transform: translateX(-50%) scale(0.97);
 }
 
-/* Redes sociales (vinculación con Meta / Firebase) */
+/* Redes sociales (vinculación con Meta) */
 .btn-redes {
   background: linear-gradient(145deg, #4c1d95 0%, #6d28d9 50%, #a855f7 100%);
   top: 52%;

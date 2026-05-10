@@ -100,6 +100,63 @@
     }
   }
 
+  function formatWins(n) {
+    var x = Math.max(0, Math.floor(Number(n) || 0));
+    return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function renderLeaderboard(rows) {
+    var tbody = document.getElementById('tabla-puntuaciones-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!rows || !rows.length) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td colspan="3" class="tabla-msg">Aún no hay jugadores en el ranking. Vincula Facebook e Instagram en Redes sociales y gana partidas.</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var tr2 = document.createElement('tr');
+      tr2.innerHTML =
+        '<td>' +
+        (r.rank != null ? r.rank : i + 1) +
+        '</td><td>' +
+        escapeHtml(String(r.name || 'Jugador')) +
+        '</td><td>' +
+        formatWins(r.wins) +
+        '</td>';
+      tbody.appendChild(tr2);
+    }
+  }
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function loadLeaderboard() {
+    fetch('/api/scores')
+      .then(function (res) {
+        if (!res.ok) throw new Error('http');
+        return res.json();
+      })
+      .then(function (data) {
+        renderLeaderboard(data && data.leaderboard ? data.leaderboard : []);
+      })
+      .catch(function () {
+        var tbody = document.getElementById('tabla-puntuaciones-body');
+        if (tbody) {
+          tbody.innerHTML =
+            '<tr><td colspan="3" class="tabla-msg err">No se pudo cargar el ranking. ¿Estás usando <code>npm start</code> y no solo un servidor estático?</td></tr>';
+        }
+      });
+  }
+
   function initButtons() {
     var btn = document.getElementById('btn-volver');
     if (btn) {
@@ -112,6 +169,7 @@
   function init() {
     initScene();
     initButtons();
+    loadLeaderboard();
   }
 
   if (document.readyState === 'loading') {

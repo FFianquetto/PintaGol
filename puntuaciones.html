@@ -16,21 +16,20 @@
     <div id="puntuaciones-overlay">
       <div id="puntuaciones-panel">
         <h2 id="puntuaciones-title">PUNTUACIONES</h2>
+        <p id="puntuaciones-subtitle" class="puntuaciones-subtitle">
+          Partidas ganadas (jugadores con Facebook e Instagram vinculados en Redes sociales). Usa <code>npm start</code> para ver datos en vivo.
+        </p>
 
         <table id="tabla-puntuaciones">
           <thead>
             <tr>
               <th class="col-rango">Rango</th>
               <th class="col-jugador">Jugador</th>
-              <th class="col-puntos">Puntos</th>
+              <th class="col-victorias">Victorias</th>
             </tr>
           </thead>
-          <tbody>
-            <tr><td>1</td><td>Campeón10</td><td>2,450</td></tr>
-            <tr><td>2</td><td>Golazo_Mx</td><td>2,180</td></tr>
-            <tr><td>3</td><td>Estrella_Fut</td><td>1,920</td></tr>
-            <tr><td>4</td><td>PincelPro</td><td>1,750</td></tr>
-            <tr><td>5</td><td>Arcoiris_Fut</td><td>1,520</td></tr>
+          <tbody id="tabla-puntuaciones-body">
+            <tr><td colspan="3" class="tabla-msg">Cargando ranking…</td></tr>
           </tbody>
         </table>
 

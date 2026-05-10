@@ -122,6 +122,21 @@ input:focus {
   transform: translateY(0);
 }
 
+.btn:disabled,
+.btn[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.35);
+  transform: none;
+  pointer-events: none;
+}
+
+.btn:disabled:hover,
+.btn[disabled]:hover {
+  filter: grayscale(0.35);
+  transform: none;
+}
+
 .btn-prim {
   background: linear-gradient(155deg, #166534 0%, #16a34a 100%);
 }

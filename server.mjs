@@ -11,6 +11,98 @@ const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 3333;
 const pendingMetaOauth = new Map();
 
+const DATA_DIR = path.join(ROOT, 'data');
+const SCORES_DB_PATH = path.join(DATA_DIR, 'scores-meta.json');
+
+function ensureDataDir() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch {
+    /* no-op */
+  }
+}
+
+function loadScoresDb() {
+  ensureDataDir();
+  try {
+    const raw = fs.readFileSync(SCORES_DB_PATH, 'utf8');
+    const o = JSON.parse(raw);
+    if (o && typeof o.users === 'object') return o;
+  } catch {
+    /* nuevo */
+  }
+  return { users: {} };
+}
+
+function saveScoresDb(db) {
+  ensureDataDir();
+  fs.writeFileSync(SCORES_DB_PATH, JSON.stringify(db, null, 2), 'utf8');
+}
+
+/** @param {'facebook'|'instagram'} channel */
+function upsertOAuthUser(db, userId, email, name, channel) {
+  const id = String(userId || '').trim();
+  if (!id) return null;
+  const prev = db.users[id] || {};
+  const u = {
+    id,
+    email: typeof prev.email === 'string' ? prev.email : '',
+    name: typeof prev.name === 'string' ? prev.name : '',
+    wins: typeof prev.wins === 'number' ? prev.wins : 0,
+    linkedFacebook: !!prev.linkedFacebook,
+    linkedInstagram: !!prev.linkedInstagram,
+    updatedAt: prev.updatedAt || ''
+  };
+  if (email) u.email = email;
+  if (name) u.name = name;
+  if (channel === 'facebook') u.linkedFacebook = true;
+  if (channel === 'instagram') u.linkedInstagram = true;
+  u.updatedAt = new Date().toISOString();
+  db.users[id] = u;
+  saveScoresDb(db);
+  return u;
+}
+
+function getLeaderboard(db, limit = 50) {
+  const rows = Object.values(db.users).filter((x) => x && x.linkedFacebook && x.linkedInstagram);
+  rows.sort((a, b) => (b.wins || 0) - (a.wins || 0));
+  return rows.slice(0, limit).map((r, i) => ({
+    rank: i + 1,
+    userId: r.id,
+    name: (r.name && String(r.name).trim()) || (r.email && String(r.email).trim()) || 'Jugador',
+    wins: r.wins || 0
+  }));
+}
+
+function incrementWin(db, userId) {
+  const id = String(userId || '').trim();
+  if (!id || !db.users[id]) return { ok: false, reason: 'unknown_user' };
+  const u = db.users[id];
+  if (!u.linkedFacebook || !u.linkedInstagram) return { ok: false, reason: 'not_fully_linked' };
+  u.wins = (u.wins || 0) + 1;
+  u.updatedAt = new Date().toISOString();
+  saveScoresDb(db);
+  return { ok: true, wins: u.wins };
+}
+
+function readJsonBody(req, maxLen = 65536) {
+  return new Promise((resolve, reject) => {
+    let buf = '';
+    req.on('data', (chunk) => {
+      buf += chunk;
+      if (buf.length > maxLen) reject(new Error('too_large'));
+    });
+    req.on('end', () => {
+      try {
+        resolve(buf ? JSON.parse(buf) : {});
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 function loadMetaSecrets() {
   const p = path.join(ROOT, 'redes-secrets.json');
   try {
@@ -29,6 +121,78 @@ let metaCached = null;
 function getMetaSecrets() {
   if (!metaCached) metaCached = loadMetaSecrets();
   return metaCached;
+}
+
+/** Valida que el token de usuario pertenezca a nuestra app Meta (Graph debug_token). */
+async function assertUserTokenForApp(userAccessToken, sec) {
+  const appAccessToken = `${sec.id}|${sec.secret}`;
+  const dbgUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(
+    userAccessToken
+  )}&access_token=${encodeURIComponent(appAccessToken)}`;
+  const dbg = await httpsGetJson(dbgUrl);
+  const d = dbg && dbg.data;
+  if (!d || !d.is_valid || String(d.app_id) !== String(sec.id)) {
+    throw new Error('invalid_token');
+  }
+}
+
+function handleVerifySdkToken(req, res) {
+  const sec = getMetaSecrets();
+  if (!sec) {
+    res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: false, message: 'Servidor sin credenciales Meta.' }));
+    return;
+  }
+  readJsonBody(req)
+    .then(async (body) => {
+      const accessToken = body && body.accessToken ? String(body.accessToken).trim() : '';
+      const channel = body && body.channel === 'instagram' ? 'instagram' : 'facebook';
+      if (!accessToken) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, message: 'Falta accessToken.' }));
+        return;
+      }
+      try {
+        await assertUserTokenForApp(accessToken, sec);
+      } catch {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, message: 'Token inválido o no pertenece a esta app.' }));
+        return;
+      }
+      const meUrl = `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`;
+      let me;
+      try {
+        me = await httpsGetJson(meUrl);
+      } catch {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, message: 'No se pudo leer /me.' }));
+        return;
+      }
+      const email = (me && me.email) || '';
+      const userId = me && me.id != null ? String(me.id) : '';
+      const displayName = (me && me.name) || '';
+      if (!userId) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, message: 'Meta no devolvió id de usuario.' }));
+        return;
+      }
+      const db = loadScoresDb();
+      upsertOAuthUser(db, userId, email, displayName, channel);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(
+        JSON.stringify({
+          ok: true,
+          userId,
+          name: displayName,
+          email,
+          channel
+        })
+      );
+    })
+    .catch(() => {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, message: 'Petición inválida.' }));
+    });
 }
 
 function httpsGetJson(u) {
@@ -106,6 +270,11 @@ function serveStatic(req, res) {
   try {
     const u = new URL(req.url || '/', 'http://localhost');
     let pathname = decodeURIComponent(u.pathname);
+    if (pathname.startsWith('/data/')) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Forbidden');
+      return;
+    }
     if (pathname === '/') pathname = '/index.html';
     if (pathname === '/astro-sync' || pathname === '/astro-sync/') pathname = '/astro-sync.html';
 
@@ -150,7 +319,8 @@ function removeFromRoom(gameId, client) {
   if (set.size === 0) rooms.delete(gameId);
 }
 
-function handleInstagramAuthorize(req, res) {
+/** @param {'facebook'|'instagram'} channel */
+function handleMetaAuthorize(req, res, channel) {
   const sec = getMetaSecrets();
   if (!sec) {
     res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -171,7 +341,12 @@ function handleInstagramAuthorize(req, res) {
     returnOrigin = `http://localhost:${PORT}`;
   }
   const redirectUri = `${returnOrigin}/oauth/meta/callback`;
-  pendingMetaOauth.set(state, { exp: Date.now() + 10 * 60 * 1000, returnOrigin, redirectUri });
+  pendingMetaOauth.set(state, {
+    exp: Date.now() + 10 * 60 * 1000,
+    returnOrigin,
+    redirectUri,
+    channel
+  });
   const scope = encodeURIComponent('email,public_profile');
   const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(sec.id)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&response_type=code&scope=${scope}`;
   res.writeHead(302, { Location: url });
@@ -202,17 +377,23 @@ function handleMetaCallback(req, res, u) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(
       buildPostMessageHtml(
-        { ok: false, message: 'Sesión de autorización expirada. Cierra e intenta de nuevo.', email: '' },
+        {
+          ok: false,
+          message: 'Sesión de autorización expirada. Cierra e intenta de nuevo.',
+          email: '',
+          channel: rec && rec.channel ? rec.channel : 'instagram'
+        },
         rec && rec.returnOrigin ? rec.returnOrigin : '*'
       )
     );
     return;
   }
+  const oauthChannel = rec.channel || 'instagram';
   pendingMetaOauth.delete(state);
   const sec = getMetaSecrets();
   if (!sec) {
     res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(buildPostMessageHtml({ ok: false, message: 'Servidor sin credenciales.' }, rec.returnOrigin));
+    res.end(buildPostMessageHtml({ ok: false, message: 'Servidor sin credenciales.', channel: oauthChannel }, rec.returnOrigin));
     return;
   }
   const redirectUri = rec.redirectUri;
@@ -228,7 +409,12 @@ function handleMetaCallback(req, res, u) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(
         buildPostMessageHtml(
-          { ok: false, message: 'Error al canjear el token de Meta. Revisa redirect URI y App Secret.', email: '' },
+          {
+            ok: false,
+            message: 'Error al canjear el token de Meta. Revisa redirect URI y App Secret.',
+            email: '',
+            channel: oauthChannel
+          },
           targetOrigin
         )
       );
@@ -241,14 +427,15 @@ function handleMetaCallback(req, res, u) {
           {
             ok: false,
             message: (tok && tok.error && tok.error.message) || 'Meta no devolvió el token de acceso.',
-            email: ''
+            email: '',
+            channel: oauthChannel
           },
           targetOrigin
         )
       );
       return;
     }
-    const meUrl = `https://graph.facebook.com/me?fields=email&access_token=${encodeURIComponent(tok.access_token)}`;
+    const meUrl = `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(tok.access_token)}`;
     let me;
     try {
       me = await httpsGetJson(meUrl);
@@ -256,23 +443,91 @@ function handleMetaCallback(req, res, u) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(
         buildPostMessageHtml(
-          { ok: false, message: 'No se pudo leer /me. Concede permisos de correo a la app.', email: '' },
+          {
+            ok: false,
+            message: 'No se pudo leer /me. Concede permisos de correo y perfil público a la app.',
+            email: '',
+            channel: oauthChannel
+          },
           targetOrigin
         )
       );
       return;
     }
     const email = (me && me.email) || '';
+    const userId = me && me.id != null ? String(me.id) : '';
+    const displayName = (me && me.name) || '';
+    if (!userId) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        buildPostMessageHtml(
+          {
+            ok: false,
+            message: 'Meta no devolvió el id de usuario. Revisa permisos de la app.',
+            email: '',
+            channel: oauthChannel
+          },
+          targetOrigin
+        )
+      );
+      return;
+    }
+    const db = loadScoresDb();
+    upsertOAuthUser(db, userId, email, displayName, oauthChannel);
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(buildPostMessageHtml({ ok: true, email, channel: 'instagram' }, targetOrigin));
+    res.end(
+      buildPostMessageHtml(
+        { ok: true, email, channel: oauthChannel, userId, name: displayName },
+        targetOrigin
+      )
+    );
   })();
 }
 
 const server = http.createServer((req, res) => {
   try {
     const u = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (u.pathname === '/api/scores' && req.method === 'GET') {
+      const db = loadScoresDb();
+      const leaderboard = getLeaderboard(db);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ leaderboard }));
+      return;
+    }
+    if (u.pathname === '/api/scores/win' && req.method === 'POST') {
+      readJsonBody(req)
+        .then((body) => {
+          const db = loadScoresDb();
+          const out = incrementWin(db, body && body.userId);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(out));
+        })
+        .catch(() => {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, reason: 'bad_json' }));
+        });
+      return;
+    }
+    if (u.pathname === '/api/redes/meta-configured' && req.method === 'GET') {
+      const ok = !!getMetaSecrets();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok }));
+      return;
+    }
+    if (u.pathname === '/api/redes/meta-app-id' && req.method === 'GET') {
+      const sec = getMetaSecrets();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ appId: sec ? sec.id : '' }));
+      return;
+    }
+    if (u.pathname === '/api/redes/verify-sdk-token' && req.method === 'POST') {
+      return handleVerifySdkToken(req, res);
+    }
+    if (u.pathname === '/api/redes/facebook/authorize' && req.method === 'GET') {
+      return handleMetaAuthorize(req, res, 'facebook');
+    }
     if (u.pathname === '/api/redes/instagram/authorize' && req.method === 'GET') {
-      return handleInstagramAuthorize(req, res);
+      return handleMetaAuthorize(req, res, 'instagram');
     }
     if (u.pathname === '/oauth/meta/callback' && req.method === 'GET') {
       return handleMetaCallback(req, res, u);
