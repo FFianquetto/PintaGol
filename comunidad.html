@@ -16,30 +16,53 @@
     <div id="comunidad-overlay">
       <div id="comunidad-panel">
         <h2 id="comunidad-title">COMUNIDAD</h2>
-        <p class="comunidad-subtitulo">Noticias</p>
+        <p class="comunidad-subtitulo">Publicaciones de jugadores</p>
 
-        <section id="noticias-list">
-          <article class="noticia">
-            <h3 class="noticia-titulo">Mundial 2026: sedes confirmadas en USA, México y Canadá</h3>
-            <p class="noticia-bajada">La FIFA dio a conocer el calendario oficial. El torneo se disputará en 16 ciudades de los tres países anfitriones entre junio y julio de 2026.</p>
-          </article>
-          <article class="noticia">
-            <h3 class="noticia-titulo">Argentina se mantiene líder del ranking FIFA</h3>
-            <p class="noticia-bajada">La Albiceleste encabeza la clasificación mundial tras su último título. Francia y Brasil completan el podio en la lista actualizada.</p>
-          </article>
-          <article class="noticia">
-            <h3 class="noticia-titulo">Pinta Gol supera el millón de jugadores</h3>
-            <p class="noticia-bajada">La comunidad global de Pinta Gol sigue creciendo. Jugadores de más de 50 países se suman cada semana para disputar partidas en línea.</p>
-          </article>
-        </section>
+        <p id="comunidad-aviso-facebook" class="comunidad-aviso-fb" hidden>
+          Para publicar o comentar, vincula tu cuenta de Facebook en
+          <a href="redes-sociales.html">Redes sociales</a>.
+        </p>
+
+        <div id="comunidad-form-publicar" class="comunidad-form-publicar" hidden>
+          <label for="comunidad-texto" class="comunidad-label">Tu mensaje</label>
+          <textarea id="comunidad-texto" class="comunidad-textarea" rows="3" maxlength="4000" placeholder="¿Qué quieres compartir con la comunidad?"></textarea>
+          <span class="comunidad-label">Foto (opcional)</span>
+          <div class="comunidad-foto-wrap">
+            <input type="file" id="comunidad-foto" class="comunidad-file-input" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Seleccionar imagen">
+            <label for="comunidad-foto" class="comunidad-btn-foto">Elegir imagen</label>
+            <span id="comunidad-foto-nombre" class="comunidad-foto-nombre" aria-live="polite">Ninguna imagen</span>
+          </div>
+          <button type="button" id="comunidad-btn-publicar" class="comunidad-btn-primario">Publicar</button>
+        </div>
+
+        <p id="comunidad-feed-status" class="comunidad-status" role="status" aria-live="polite"></p>
+
+        <section id="comunidad-feed-list" class="comunidad-feed-list" aria-label="Lista de publicaciones"></section>
 
         <button type="button" id="btn-volver">Volver al lobby</button>
+      </div>
+    </div>
+
+    <div id="comunidad-modal-borrar" class="comunidad-modal" role="dialog" aria-modal="true" aria-labelledby="comunidad-modal-borrar-titulo" hidden>
+      <button type="button" class="comunidad-modal-fondo" id="comunidad-modal-borrar-fondo" aria-label="Cerrar"></button>
+      <div class="comunidad-modal-caja">
+        <h3 id="comunidad-modal-borrar-titulo" class="comunidad-modal-titulo">¿Borrar esta publicación?</h3>
+        <p class="comunidad-modal-texto">
+          Se eliminará de forma permanente. Los comentarios asociados también se borrarán y no podrás recuperarlos.
+        </p>
+        <div class="comunidad-modal-acciones">
+          <button type="button" id="comunidad-modal-borrar-cancelar" class="comunidad-modal-btn comunidad-modal-btn-secundario">Cancelar</button>
+          <button type="button" id="comunidad-modal-borrar-confirmar" class="comunidad-modal-btn comunidad-modal-btn-peligro">Borrar publicación</button>
+        </div>
       </div>
     </div>
   </div>
 
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="js/comunidad-meta-sdk.js"></script>
+  <script src="js/comunidad-api-client.js"></script>
   <script src="js/comunidad.js"></script>
+  <script src="js/comunidad-feed.js"></script>
   <script src="js/background-music.js"></script>
 </body>
 </html>

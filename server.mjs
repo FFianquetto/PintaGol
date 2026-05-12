@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import http from 'http';
-import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -8,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { createMysqlPool } from './db/mysql-pool.mjs';
 import { createJugadoresRepo } from './db/jugadores-repo.mjs';
+import { httpsGetJson, assertUserTokenForApp, fetchMetaMe } from './lib/meta-graph.mjs';
+import { createComunidadHandlers } from './api/comunidad-handlers.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -16,6 +17,9 @@ const pendingMetaOauth = new Map();
 
 const mysqlPool = createMysqlPool();
 const jugadoresRepo = mysqlPool ? createJugadoresRepo(mysqlPool) : null;
+const comunidadHandlers = mysqlPool && jugadoresRepo
+  ? createComunidadHandlers({ pool: mysqlPool, jugadoresRepo, getMetaSecrets, ROOT })
+  : null;
 if (jugadoresRepo) {
   console.log('[scores] MySQL: tabla jugadores (MYSQL_HOST=' + process.env.MYSQL_HOST + ')');
 } else {
@@ -148,19 +152,6 @@ function getMetaSecrets() {
   return metaCached;
 }
 
-/** Valida que el token de usuario pertenezca a nuestra app Meta (Graph debug_token). */
-async function assertUserTokenForApp(userAccessToken, sec) {
-  const appAccessToken = `${sec.id}|${sec.secret}`;
-  const dbgUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(
-    userAccessToken
-  )}&access_token=${encodeURIComponent(appAccessToken)}`;
-  const dbg = await httpsGetJson(dbgUrl);
-  const d = dbg && dbg.data;
-  if (!d || !d.is_valid || String(d.app_id) !== String(sec.id)) {
-    throw new Error('invalid_token');
-  }
-}
-
 function handleVerifySdkToken(req, res) {
   const sec = getMetaSecrets();
   if (!sec) {
@@ -184,10 +175,9 @@ function handleVerifySdkToken(req, res) {
         res.end(JSON.stringify({ ok: false, message: 'Token inválido o no pertenece a esta app.' }));
         return;
       }
-      const meUrl = `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`;
       let me;
       try {
-        me = await httpsGetJson(meUrl);
+        me = await fetchMetaMe(accessToken);
       } catch {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, message: 'No se pudo leer /me.' }));
@@ -261,26 +251,6 @@ function handleVerifySdkToken(req, res) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, message: 'Petición inválida.' }));
     });
-}
-
-function httpsGetJson(u) {
-  return new Promise((resolve, reject) => {
-    https
-      .get(u, (r) => {
-        let b = '';
-        r.on('data', (c) => {
-          b += c;
-        });
-        r.on('end', () => {
-          try {
-            resolve(JSON.parse(b));
-          } catch (e) {
-            reject(new Error('Respuesta no JSON'));
-          }
-        });
-      })
-      .on('error', reject);
-  });
 }
 
 function buildPostMessageHtml(payload, postMessageTarget) {
@@ -635,6 +605,31 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/oauth/meta/callback' && req.method === 'GET') {
       return handleMetaCallback(req, res, u);
     }
+    if (u.pathname.startsWith('/api/comunidad/')) {
+      if (!comunidadHandlers) {
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            message:
+              'Comunidad requiere MySQL. Configura MYSQL_* en .env y ejecuta sql/comunidad.sql.'
+          })
+        );
+        return;
+      }
+      comunidadHandlers(req, res, u)
+        .then((handled) => {
+          if (!handled) serveStatic(req, res);
+        })
+        .catch((err) => {
+          console.error('[comunidad]', err && err.message ? err.message : err);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ ok: false, message: 'Error interno.' }));
+          }
+        });
+      return;
+    }
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Error en rutas de redes');
@@ -701,5 +696,8 @@ server.listen(PORT, () => {
       .catch((err) =>
         console.error('[mysql] Error de conexión:', err && err.message ? err.message : err)
       );
+  }
+  if (comunidadHandlers) {
+    console.log('[comunidad] API activa (/api/comunidad/*). Imágenes en uploads/comunidad/.');
   }
 });

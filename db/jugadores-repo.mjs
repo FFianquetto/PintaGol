@@ -24,6 +24,17 @@ export function createJugadoresRepo(pool) {
       return { id, email, name };
     },
 
+    /** @param {string} userId */
+    async hasFacebookLink(userId) {
+      const id = String(userId || '').trim();
+      if (!id) return false;
+      const [rows] = await pool.execute(
+        `SELECT 1 AS ok FROM jugadores WHERE meta_user_id = ? AND vinculo_facebook = 1 LIMIT 1`,
+        [id]
+      );
+      return !!(rows && rows.length);
+    },
+
     async incrementWin(userId) {
       const id = String(userId || '').trim();
       if (!id) return { ok: false, reason: 'unknown_user' };
