@@ -1,3 +1,10 @@
+import {
+  ZOMBIE_COOP_VICTORY_TITLE,
+  getZombieCoopVictoryOverlayMessage,
+  ZOMBIE_COOP_DEFEAT_TITLE,
+  getZombieCoopDefeatOverlayMessage
+} from "./zombie-coop-constants.js";
+
 export function setZombieHudStatus(text) {
   const el = document.getElementById("astro-status");
   if (!el) return;
@@ -11,12 +18,12 @@ export function showZombieEndOverlay(resultType) {
   if (!overlay || !text) return;
   const card = overlay.querySelector(".astro-defeat-card");
   if (resultType === "victory") {
-    if (title) title.textContent = "Victoria";
-    text.textContent = "Victoria: completaron las 3 oleadas y eliminaron a todos los zombies.";
+    if (title) title.textContent = ZOMBIE_COOP_VICTORY_TITLE;
+    text.textContent = getZombieCoopVictoryOverlayMessage();
     if (card) card.classList.add("victory");
   } else {
-    if (title) title.textContent = "Derrota";
-    text.textContent = "Derrota: los 4 jugadores fueron eliminados por los zombies.";
+    if (title) title.textContent = ZOMBIE_COOP_DEFEAT_TITLE;
+    text.textContent = getZombieCoopDefeatOverlayMessage();
     if (card) card.classList.remove("victory");
   }
   overlay.hidden = false;

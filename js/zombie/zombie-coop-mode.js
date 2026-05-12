@@ -12,6 +12,7 @@ import {
   ZOMBIE_MIN_VISUAL_LIFT,
   TOTAL_WAVES,
   WAVE_ZOMBIE_COUNTS,
+  INTER_WAVE_GAP_MS,
   SEGMENT_STEPS,
   SNAPSHOT_SEND_MS,
   COOP_SYNC_MODE,
@@ -20,7 +21,9 @@ import {
   MAP_PLAY_BOUNDS,
   PHASE_WAITING_PLAYERS,
   PHASE_COUNTDOWN,
-  PHASE_ACTIVE
+  PHASE_ACTIVE,
+  getZombieCoopVictoryHudMessage,
+  getZombieCoopDefeatHudMessage
 } from "./zombie-coop-constants.js";
 import {
   setZombieHudStatus,
@@ -170,11 +173,11 @@ function createFallbackZombie() {
   const mesh = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.42, 1.25, 6, 10),
     new THREE.MeshStandardMaterial({
-      color: 0x22c55e,
-      emissive: 0x14532d,
-      emissiveIntensity: 0.34,
-      roughness: 0.52,
-      metalness: 0.08
+      color: 0x3d6b4f,
+      emissive: 0x0a1f14,
+      emissiveIntensity: 0.12,
+      roughness: 0.58,
+      metalness: 0.06
     })
   );
   const root = new THREE.Group();
@@ -190,13 +193,16 @@ function brightenZombieMaterials(root) {
     for (let i = 0; i < materials.length; i += 1) {
       const mat = materials[i];
       if (!mat) continue;
-      if (mat.color && mat.color.multiplyScalar) mat.color.multiplyScalar(1.05);
+      if (mat.color && mat.color.multiplyScalar) mat.color.multiplyScalar(0.94);
       if ("emissive" in mat && mat.emissive && mat.emissive.setHex) {
-        mat.emissive.setHex(0x166534);
+        mat.emissive.setHex(0x0c2418);
       }
-      if ("emissiveIntensity" in mat) mat.emissiveIntensity = Math.max(0.14, Number(mat.emissiveIntensity) || 0);
+      if ("emissiveIntensity" in mat) {
+        const base = Number(mat.emissiveIntensity) || 0;
+        mat.emissiveIntensity = Math.min(0.12, base * 0.42 + 0.02);
+      }
       if ("roughness" in mat && typeof mat.roughness === "number") {
-        mat.roughness = Math.min(0.65, mat.roughness);
+        mat.roughness = Math.min(0.72, Math.max(0.38, mat.roughness * 1.05));
       }
       mat.needsUpdate = true;
     }
@@ -260,7 +266,11 @@ function adjustZombieToGround(root) {
 }
 
 function createZombieAt(position) {
-  const root = buildZombieMeshClone() || createFallbackZombie();
+  let root = buildZombieMeshClone();
+  if (!root) {
+    root = createFallbackZombie();
+    brightenZombieMaterials(root);
+  }
   root.name = "zombie-coop-enemy";
   root.position.set(
     Math.max(-MAP_PLAY_BOUNDS, Math.min(MAP_PLAY_BOUNDS, position.x)),
@@ -269,9 +279,8 @@ function createZombieAt(position) {
   );
   root.userData.zombieEnemy = true;
   root.scale.multiplyScalar(0.86);
-  brightenZombieMaterials(root);
   adjustZombieToGround(root);
-  const glow = new THREE.PointLight(0x86efac, 0.18, 5.2, 2);
+  const glow = new THREE.PointLight(0x5c8c6e, 0.07, 4.2, 2.2);
   glow.position.set(0, 1.25, 0);
   root.add(glow);
   scene.add(root);
@@ -327,9 +336,15 @@ function spawnWave(index) {
     pos.z = Math.max(-MAP_PLAY_BOUNDS, Math.min(MAP_PLAY_BOUNDS, pos.z));
     zombies.push(createZombieAt(pos));
   }
-  setPhase(PHASE_WAITING_PLAYERS);
   countdownEndAtMs = 0;
-  setHudStatus(`Esperando ${REQUIRED_READY_PLAYERS} jugadores para iniciar...`);
+  // Solo antes de la oleada 1 se espera a los 4 conectados/listos; oleadas siguientes continúan aunque haya bajas.
+  if (index === 0) {
+    setPhase(PHASE_WAITING_PLAYERS);
+    setHudStatus(`Esperando ${REQUIRED_READY_PLAYERS} jugadores para iniciar...`);
+  } else {
+    setPhase(PHASE_ACTIVE);
+    setHudStatus(`Oleada ${Math.min(TOTAL_WAVES, index + 1)}/${TOTAL_WAVES} en progreso`);
+  }
   broadcastSnapshotNow();
 }
 
@@ -476,14 +491,15 @@ function handleZombieKilled(zombie) {
     matchResult = "victory";
     showEndOverlay(matchResult);
     reportCoopVictoryToLeaderboard();
-    setHudStatus("Modo zombie cooperativo completado. Oleadas terminadas.");
+    setHudStatus(getZombieCoopVictoryHudMessage());
     broadcastSnapshotNow();
     return;
   }
   if (!waveSpawning) {
     waveSpawning = true;
-    setHudStatus(`Oleada ${waveIndex + 1} iniciando...`);
-    window.setTimeout(() => spawnWave(waveIndex), 1800);
+    const gapSec = Math.round(INTER_WAVE_GAP_MS / 1000);
+    setHudStatus(`Oleada ${waveIndex + 1}/${TOTAL_WAVES}: comienza en ${gapSec} s...`);
+    window.setTimeout(() => spawnWave(waveIndex), INTER_WAVE_GAP_MS);
   }
   broadcastSnapshotNow();
 }
@@ -608,11 +624,11 @@ function applyRemoteSnapshot(snapshot) {
   const currentWave = Math.min(TOTAL_WAVES, waveIndex + 1);
   if (coopFinished) {
     if (matchResult === "victory") {
-      setHudStatus("Victoria: oleadas completadas.");
+      setHudStatus(getZombieCoopVictoryHudMessage());
       showEndOverlay("victory");
       reportCoopVictoryToLeaderboard();
     } else if (matchResult === "defeat") {
-      setHudStatus("Derrota: todos los jugadores cayeron.");
+      setHudStatus(getZombieCoopDefeatHudMessage());
       showEndOverlay("defeat");
     } else {
       setHudStatus("Partida finalizada.");
@@ -722,7 +738,7 @@ function onFrameCoop({ dt }) {
         coopFinished = true;
         matchResult = "defeat";
         showEndOverlay(matchResult);
-        setHudStatus("Derrota: todos los jugadores fueron eliminados.");
+        setHudStatus(getZombieCoopDefeatHudMessage());
         broadcastSnapshotNow();
       }
     }

@@ -315,6 +315,7 @@ function serveStatic(req, res) {
     }
     if (pathname === '/') pathname = '/index.html';
     if (pathname === '/astro-sync' || pathname === '/astro-sync/') pathname = '/astro-sync.html';
+    if (pathname === '/zombie-sync' || pathname === '/zombie-sync/') pathname = '/zombie-sync.html';
 
     const filePath = path.normalize(path.join(ROOT, pathname));
     if (!filePath.startsWith(ROOT)) {

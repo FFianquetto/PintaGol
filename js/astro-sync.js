@@ -220,6 +220,10 @@ const SEASON_TO_SKY_TEXTURE = {
 };
 let localPlayerColor = PLAYER_COLORS[0];
 const QUERY_PARAMS = new URLSearchParams(window.location.search);
+/** Vista zombie cooperativo (zombie-sync): no aplicar reglas de “último astronauta” ni textos de batalla PvP. */
+const IS_ZOMBIE_COOP_SYNC_PAGE =
+  typeof window !== "undefined" &&
+  /zombie-sync/i.test(String(window.location.pathname || "").concat(window.location.href || ""));
 const INITIAL_WEAPON_QUERY = (QUERY_PARAMS.get("countryKey") || "").toLowerCase();
 const CURRENT_GAME_ID = QUERY_PARAMS.get("game") || "";
 const LOCAL_WEAPON_STATE_KEY = `pintagol_astro_weapon_${CURRENT_GAME_ID || "nogame"}_${LOCAL_PLAYER_NAME || LOCAL_PLAYER_ID || "anon"}`;
@@ -1782,7 +1786,12 @@ function enterSpectatorMode(message, options = {}) {
   } else {
     setPlayerEliminatedVisual(astroRoot, true);
   }
-  setDefeatOverlayVisible(true, message || "Tu barra GameTag se llenó. Ahora estás en modo espectador.");
+  const defaultMsgMulti = "Tu barra GameTag se llenó. Ahora estás en modo espectador.";
+  const defaultMsgZombie =
+    "Tu barra de vida se llenó. Observa la partida: el equipo sigue enfrentando a los zombies.";
+  const overlayTitle = IS_ZOMBIE_COOP_SYNC_PAGE ? "Caído en combate" : "Perdiste";
+  const overlayBody = message || (IS_ZOMBIE_COOP_SYNC_PAGE ? defaultMsgZombie : defaultMsgMulti);
+  setDefeatOverlayVisible(true, overlayBody, overlayTitle, "defeat");
   updateSpectatorIndicator();
   persistLocalCombatState();
 }
@@ -1799,6 +1808,7 @@ function alivePlayerIds() {
 
 function handleMatchFinished(winnerId) {
   if (matchEnded) return;
+  if (IS_ZOMBIE_COOP_SYNC_PAGE) return;
   matchEnded = true;
   matchWinnerPlayerId = winnerId || "";
   const localWon = matchWinnerPlayerId === LOCAL_PLAYER_ID;
@@ -1832,6 +1842,7 @@ function handleMatchFinished(winnerId) {
 
 function checkForLastAstronautStanding() {
   if (matchEnded) return;
+  if (IS_ZOMBIE_COOP_SYNC_PAGE) return;
   const knownPlayers = 1 + remotePlayers.size;
   if (knownPlayers < 2) return;
   const alive = alivePlayerIds();
@@ -2146,8 +2157,17 @@ function handleRemoteDamage(d) {
     if (astroRoot) updateNameTag(astroRoot, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
     persistLocalCombatState();
     if (localDefeated) {
-      enterSpectatorMode("Perdiste la ronda. Estás en modo espectador.");
-      setStatus("Has perdido: modo espectador activo.", false);
+      enterSpectatorMode(
+        IS_ZOMBIE_COOP_SYNC_PAGE
+          ? "Has sido eliminado. El equipo sigue luchando contra la horda."
+          : "Perdiste la ronda. Estás en modo espectador."
+      );
+      setStatus(
+        IS_ZOMBIE_COOP_SYNC_PAGE
+          ? "Eliminado: modo espectador (la oleada continúa)."
+          : "Has perdido: modo espectador activo.",
+        false
+      );
     }
     return;
   }
@@ -2444,8 +2464,17 @@ function applyHitToLocalPlayer(hitColorHex = 0xffffff, damage = 1) {
   persistLocalCombatState();
   if (localHits >= MAX_HITS) {
     localDefeated = true;
-    enterSpectatorMode("Tu barra GameTag se llenó con 20 impactos. Ahora observas la partida.");
-    setStatus("Has perdido: tu gametag se llenó de rojo (20 impactos).", false);
+    enterSpectatorMode(
+      IS_ZOMBIE_COOP_SYNC_PAGE
+        ? "Tu barra se llenó por impactos y contacto con zombies. Observa mientras el equipo defiende la oleada."
+        : "Tu barra GameTag se llenó con 20 impactos. Ahora observas la partida."
+    );
+    setStatus(
+      IS_ZOMBIE_COOP_SYNC_PAGE
+        ? "Eliminado: la barra de vida llegó al máximo."
+        : "Has perdido: tu gametag se llenó de rojo (20 impactos).",
+      false
+    );
   }
   return true;
 }
@@ -3361,8 +3390,16 @@ function placeInScene(astroGroup, gun2) {
   setDefeatOverlayVisible(false);
   updateNameTag(astroGroup, LOCAL_PLAYER_LABEL, localHits / MAX_HITS);
   if (localDefeated) {
-    enterSpectatorMode("Ya estabas eliminado. Sigues en modo espectador.", { skipExplosion: true });
-    setStatus("Modo espectador restaurado tras recarga.", false);
+    enterSpectatorMode(
+      IS_ZOMBIE_COOP_SYNC_PAGE
+        ? "Sigues eliminado; observa a tu equipo contra los zombies."
+        : "Ya estabas eliminado. Sigues en modo espectador.",
+      { skipExplosion: true }
+    );
+    setStatus(
+      IS_ZOMBIE_COOP_SYNC_PAGE ? "Modo espectador (zombie) restaurado tras recarga." : "Modo espectador restaurado tras recarga.",
+      false
+    );
   } else {
     persistLocalCombatState();
     updateSpectatorIndicator();

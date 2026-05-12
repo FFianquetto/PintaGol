@@ -63,18 +63,19 @@
         playerId: localPlayerId
       }));
       var cacheBust = Date.now();
-      var basePath = window.location.protocol === 'file:' ? 'zombie-sync.html' : '/zombie-sync';
-      // Misma firma de query params que astro-sync.
-      window.location.href =
-        basePath +
-        '?v=' + encodeURIComponent(String(cacheBust)) +
-        '&game=' + encodeURIComponent(game.id) +
-        '&pais=' + encodeURIComponent(safeWeaponLabel) +
-        '&countryKey=' + encodeURIComponent(safeWeaponKey) +
-        '&season=' + encodeURIComponent(game.seasonKey || 'invierno') +
-        '&seasonLabel=' + encodeURIComponent(game.seasonLabel || 'Invierno') +
-        '&playerName=' + encodeURIComponent(safePlayerName) +
-        '&playerId=' + encodeURIComponent(localPlayerId);
+      var dest =
+        window.location.protocol === 'file:'
+          ? new URL('zombie-sync.html', window.location.href)
+          : new URL('/zombie-sync', window.location.origin);
+      dest.searchParams.set('v', String(cacheBust));
+      dest.searchParams.set('game', game.id);
+      dest.searchParams.set('pais', safeWeaponLabel);
+      dest.searchParams.set('countryKey', safeWeaponKey);
+      dest.searchParams.set('season', game.seasonKey || 'invierno');
+      dest.searchParams.set('seasonLabel', game.seasonLabel || 'Invierno');
+      dest.searchParams.set('playerName', safePlayerName);
+      dest.searchParams.set('playerId', localPlayerId);
+      window.location.href = dest.toString();
     }
 
     function heartbeat() {
