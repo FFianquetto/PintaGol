@@ -17,6 +17,10 @@ No uses solo `npx serve` u otro servidor estático: no existen las rutas /api ni
       http://localhost:3333/oauth/meta/callback
     Repite con tu puerto si cambias PORT. Si entras con 127.0.0.1, añade también:
       http://127.0.0.1:3333/oauth/meta/callback
+    Para el botón «Abrir Facebook» (Share Dialog), añade también (mismo puerto si aplica):
+      http://localhost:3333/comunidad.html
+      http://127.0.0.1:3333/comunidad.html
+    En producción, añade la misma ruta con tu dominio HTTPS (ej. https://tudominio.com/comunidad.html).
 
   • Copia App ID y App Secret (Configuración de la app → Básico).
 
@@ -74,10 +78,8 @@ No uses solo `npx serve` u otro servidor estático: no existen las rutas /api ni
 ────────────────────────────────────────
   • La página comunidad.html debe incluir <div id="fb-root"></div> al inicio del body; sin eso el
     diálogo FB.ui (Compartir) puede fallar.
-  • En localhost / 127.0.0.1 el proyecto usa el compartidor clásico de Facebook (ventana sharer.php),
-    no FB.ui con la URL local: los servidores de Meta no pueden leer http://localhost para la vista
-    previa y el diálogo del SDK suele quedarse cargando. Por eso en local no se rellena
-    facebook_enlace en MySQL (no hay post_id).
+  • En localhost / 127.0.0.1 se usa el Share Dialog por URL (facebook.com/dialog/share?app_id=…&href=…
+    &quote=…&redirect_uri=…), no sharer.php: Facebook redirigía a share_channel/# sin parámetros.
   • El botón «Abrir Facebook» comparte la URL /share/comunidad/ID: el servidor genera HTML con meta
     Open Graph (título, texto e imagen leídos de MySQL) para que el cuadro de Facebook muestre la vista previa.
   • Tras publicar, el jugador usa «Abrir Facebook» en su tarjeta (clic directo). Script SQL:

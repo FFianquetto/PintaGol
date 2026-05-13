@@ -149,24 +149,95 @@
   /* ----- Compartir publicación de Comunidad en el muro ----- */
 
   /**
-   * Meta no puede hacer scraping de localhost (ni muchas IPs locales): FB.ui con ese href suele
-   * quedarse en carga infinita. En esos hosts usamos el compartidor clásico (sin post_id).
+   * Meta no puede hacer scraping de localhost: el Share Dialog no rellena el compositor.
+   * En localhost usamos dialog/feed (name + description); en internet, share + quote / FB.ui.
    */
   function isFacebookShareLocalhost() {
     var h = (window.location.hostname || '').toLowerCase();
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
   }
 
-  function openClassicFacebookSharer(pageUrl, quote) {
-    var u = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl);
-    if (quote && String(quote).trim()) {
-      u += '&quote=' + encodeURIComponent(String(quote).trim().slice(0, 500));
+  var metaAppIdCache = '';
+  var metaAppIdLoading = null;
+
+  function getMetaAppIdForShare() {
+    if (metaAppIdCache) return Promise.resolve(metaAppIdCache);
+    if (metaAppIdLoading) return metaAppIdLoading;
+    metaAppIdLoading = fetch('/api/redes/meta-app-id')
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (d) {
+        metaAppIdCache = d && d.appId ? String(d.appId).trim() : '';
+        return metaAppIdCache;
+      })
+      .finally(function () {
+        metaAppIdLoading = null;
+      });
+    return metaAppIdLoading;
+  }
+
+  /**
+   * En localhost Meta no puede leer el href para vista previa: dialog/feed rellena nombre y descripción.
+   * En internet se usa dialog/share + quote (y FB.ui en producción).
+   * @see https://developers.facebook.com/docs/sharing/reference/share-dialog
+   * @see https://developers.facebook.com/docs/sharing/reference/feed-dialog
+   */
+  function openFacebookShareOrFeed(appId, href, quote, origin, pictureUrl, done) {
+    var redirectUri = origin + '/comunidad.html';
+    var desc = String(quote || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 500);
+    var winName = 'fb_share_' + String(Date.now());
+
+    if (isFacebookShareLocalhost()) {
+      var feed =
+        'https://www.facebook.com/dialog/feed?app_id=' +
+        encodeURIComponent(appId) +
+        '&display=popup' +
+        '&redirect_uri=' +
+        encodeURIComponent(redirectUri) +
+        '&link=' +
+        encodeURIComponent(href) +
+        '&name=' +
+        encodeURIComponent('Pinta Gol · Comunidad') +
+        '&description=' +
+        encodeURIComponent(desc || 'Publicación de la comunidad de Pinta Gol.') +
+        '&caption=' +
+        encodeURIComponent('Pinta Gol');
+      var pic = String(pictureUrl || '').trim();
+      if (pic && !/localhost|127\.0\.0\.1|\[::1\]/i.test(pic)) {
+        feed += '&picture=' + encodeURIComponent(pic);
+      }
+      try {
+        window.open(feed, winName, 'width=620,height=540,scrollbars=yes');
+      } catch (e) {
+        window.location.href = feed;
+      }
+      if (typeof done === 'function') done({});
+      return;
+    }
+
+    var url =
+      'https://www.facebook.com/dialog/share?app_id=' +
+      encodeURIComponent(appId) +
+      '&display=popup' +
+      '&href=' +
+      encodeURIComponent(href) +
+      '&redirect_uri=' +
+      encodeURIComponent(redirectUri) +
+      '&hashtag=' +
+      encodeURIComponent('#PintaGol');
+    if (desc) {
+      url += '&quote=' + encodeURIComponent(desc);
     }
     try {
-      window.open(u, 'fb_sharer', 'width=640,height=520,scrollbars=yes,noopener,noreferrer');
+      window.open(url, winName, 'width=620,height=540,scrollbars=yes');
     } catch (e) {
-      window.location.href = u;
+      window.location.href = url;
     }
+    if (typeof done === 'function') done({});
   }
 
   function facebookPermalinkFromPostId(postId) {
@@ -187,6 +258,7 @@
     opts = opts || {};
     var pubId = opts.pubId;
     var quote = opts.quote != null ? String(opts.quote) : '';
+    var pictureUrl = opts.pictureUrl != null ? String(opts.pictureUrl).trim() : '';
 
     function done(resp) {
       if (typeof callback === 'function') callback(resp || {});
@@ -201,27 +273,38 @@
     var origin = window.location.protocol + '//' + window.location.host;
     var href = origin + '/share/comunidad/' + encodeURIComponent(String(pubId));
 
-    if (isFacebookShareLocalhost()) {
-      openClassicFacebookSharer(href, quote);
-      done({});
-      return;
+    function goDialogShare() {
+      getMetaAppIdForShare()
+        .then(function (appId) {
+          if (!appId) {
+            done({});
+            return;
+          }
+          openFacebookShareOrFeed(appId, href, quote, origin, pictureUrl, done);
+        })
+        .catch(function () {
+          done({});
+        });
     }
 
-    if (typeof FB === 'undefined') {
-      openClassicFacebookSharer(href, quote);
-      done({});
-      return;
+    /* Producción: FB.ui suele devolver post_id para guardar enlace en MySQL. */
+    if (!isFacebookShareLocalhost() && typeof FB !== 'undefined') {
+      try {
+        var uiOpts = { method: 'share', href: href, hashtag: '#PintaGol' };
+        if (quote && String(quote).trim()) {
+          uiOpts.quote = String(quote).trim().slice(0, 500);
+        }
+        FB.ui(uiOpts, function (response) {
+          done(response || {});
+        });
+        return;
+      } catch (e) {
+        /* continúa con dialog/share */
+      }
     }
 
-    /* Solo href: el parámetro quote a veces bloquea el diálogo o exige permisos extra. */
-    try {
-      FB.ui({ method: 'share', href: href }, function (response) {
-        done(response || {});
-      });
-    } catch (e) {
-      openClassicFacebookSharer(href, quote);
-      done({});
-    }
+    /* Localhost: dialog/feed (texto en descripción). Sin SDK en internet: dialog/share + quote. */
+    goDialogShare();
   }
 
   /* ----- Token para la API del juego ----- */

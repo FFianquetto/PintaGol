@@ -80,24 +80,57 @@
   /* ----- Facebook: diálogo Compartir + guardar enlace (ver comunidad-meta-sdk.js) ----- */
 
   /**
-   * Diálogo Compartir de Meta + PATCH del enlace si Facebook devuelve post_id.
+   * Texto en una sola línea para `quote` (Meta suele ignorar saltos de línea).
+   * Incluye URL absoluta de la imagen si existe.
    */
-  function persistirEnlaceTrasCompartir(pubId, quote, accessToken) {
+  function absolutePubImageUrl(pub) {
+    var origin = window.location.protocol + '//' + window.location.host;
+    var img = String(pub.imagen_url || '').trim();
+    if (!img) return '';
+    if (/^https?:\/\//i.test(img)) return img;
+    return origin + (img.indexOf('/') === 0 ? img : '/' + img);
+  }
+
+  function buildFacebookQuote(pub) {
+    var t = (pub.cuerpo || '').trim();
+    if (!t && pub.imagen_url) {
+      t = 'Publicación con imagen en Pinta Gol.';
+    }
+    var img = absolutePubImageUrl(pub);
+    var line = t;
+    if (img) {
+      line = (line ? line + ' · ' : '') + 'Imagen: ' + img;
+    }
+    return line
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 500);
+  }
+
+  /**
+   * Diálogo Compartir de Meta + PATCH del enlace si Facebook devuelve post_id.
+   * No exigir FB global: en localhost el compartidor clásico no usa el SDK.
+   */
+  function persistirEnlaceTrasCompartir(pub, accessToken) {
     return new Promise(function (resolve) {
-      if (!meta.shareComunidadPublicacion || typeof FB === 'undefined') {
+      if (!meta.shareComunidadPublicacion) {
         resolve();
         return;
       }
-      meta.shareComunidadPublicacion({ pubId: pubId, quote: quote || '' }, function (resp) {
-        var url = meta.facebookPermalinkFromPostId
-          ? meta.facebookPermalinkFromPostId(resp && resp.post_id)
-          : '';
-        if (url && accessToken) {
-          api.setFacebookEnlace(pubId, accessToken, url).finally(resolve);
-        } else {
-          resolve();
+      var quote = buildFacebookQuote(pub);
+      meta.shareComunidadPublicacion(
+        { pubId: pub.id, quote: quote, pictureUrl: absolutePubImageUrl(pub) },
+        function (resp) {
+          var url = meta.facebookPermalinkFromPostId
+            ? meta.facebookPermalinkFromPostId(resp && resp.post_id)
+            : '';
+          if (url && accessToken) {
+            api.setFacebookEnlace(pub.id, accessToken, url).finally(resolve);
+          } else {
+            resolve();
+          }
         }
-      });
+      );
     });
   }
 
@@ -120,7 +153,7 @@
     meta
       .getAccessToken()
       .then(function (tok) {
-        return persistirEnlaceTrasCompartir(pub.id, pub.cuerpo || '', tok);
+        return persistirEnlaceTrasCompartir(pub, tok);
       })
       .then(function () {
         return recargarFeedYScroll(pub.id);
@@ -329,12 +362,6 @@
       aFb.textContent = 'Ver en Facebook';
       filaFb.appendChild(aFb);
     } else if (isMiPublicacion(pub)) {
-      var hintFb = document.createElement('span');
-      hintFb.className = 'comunidad-fb-hint';
-      hintFb.textContent =
-        meta.isFacebookShareLocalhost && meta.isFacebookShareLocalhost()
-          ? 'Compartir en tu muro (en localhost no se guarda el enlace en la base; con un sitio HTTPS público sí): '
-          : '¿Publicar también en tu muro? ';
       var btnFb = document.createElement('button');
       btnFb.type = 'button';
       btnFb.className = 'comunidad-btn-compartir-fb';
@@ -342,7 +369,6 @@
       btnFb.addEventListener('click', function () {
         onCompartirMuro(pub, btnFb);
       });
-      filaFb.appendChild(hintFb);
       filaFb.appendChild(btnFb);
     }
 
@@ -506,9 +532,7 @@
       })
       .then(function (newId) {
         if (newId == null) return;
-        setStatus(
-          '¡Publicado! Pulsa «Abrir Facebook» debajo del texto: en localhost se abre el compartir clásico; el enlace en la base se guarda al usar un dominio público HTTPS.'
-        );
+        setStatus('¡Publicado! Usa «Abrir Facebook» en tu tarjeta si quieres compartirla en Facebook.');
         return recargarFeedYScroll(newId);
       })
       .catch(function () {

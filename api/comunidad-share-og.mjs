@@ -97,9 +97,10 @@ export async function handleComunidadShareOgIfNeeded(req, res, u, pool) {
   const rawDesc = row.cuerpo && String(row.cuerpo).trim() ? String(row.cuerpo) : 'Publicación de la comunidad de Pinta Gol.';
   const descOg = escapeHtmlAttr(truncate(rawDesc, DESC_MAX));
   const imgAbs = absoluteImageUrl(row.imagen_url, base);
+  const imgAlt = escapeHtmlAttr(truncate(`${author} — ${rawDesc}`, 200));
   const imgTag =
     imgAbs && !/\s/.test(imgAbs)
-      ? `<meta property="og:image" content="${escapeHtmlAttr(imgAbs)}">\n<meta name="twitter:image" content="${escapeHtmlAttr(imgAbs)}">\n`
+      ? `<meta property="og:image" content="${escapeHtmlAttr(imgAbs)}">\n<meta property="og:image:alt" content="${imgAlt}">\n<meta name="twitter:image" content="${escapeHtmlAttr(imgAbs)}">\n`
       : '';
 
   const h1Html = escapeHtmlBody(`Pinta Gol · ${author}`);
