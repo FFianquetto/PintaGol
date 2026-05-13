@@ -16,6 +16,19 @@ const MIME_EXT = {
   'image/gif': '.gif'
 };
 
+/** URL permitida al guardar enlace devuelto por el diálogo Compartir de Meta. */
+function normalizeFacebookEnlace(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  if (/^https:\/\/(www\.)?facebook\.com\//i.test(s) || /^https:\/\/m\.facebook\.com\//i.test(s)) {
+    return s.length > 768 ? s.slice(0, 768) : s;
+  }
+  const compact = s.replace(/\s/g, '');
+  const m = /^(\d+)_(\d+)$/.exec(compact);
+  if (m) return `https://www.facebook.com/${m[1]}/posts/${m[2]}`.slice(0, 768);
+  return '';
+}
+
 function readJsonBody(req, maxLen = 65536) {
   return new Promise((resolve, reject) => {
     let buf = '';
@@ -232,6 +245,74 @@ export function createComunidadHandlers(opts) {
       } catch (e) {
         console.error('[comunidad] insert pub:', e && e.message ? e.message : e);
         json(res, 500, { ok: false, message: 'No se pudo guardar la publicación.' });
+      }
+      return true;
+    }
+
+    const mFbEnlace = pathname.match(/^\/api\/comunidad\/publicaciones\/(\d+)\/facebook-enlace$/);
+    if (mFbEnlace && method === 'PATCH') {
+      const pubId = Number(mFbEnlace[1]);
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch {
+        json(res, 400, { ok: false, message: 'JSON inválido.' });
+        return true;
+      }
+      const accessToken = body && body.accessToken ? String(body.accessToken).trim() : '';
+      const rawEnlace =
+        body && body.facebook_enlace != null
+          ? String(body.facebook_enlace).trim()
+          : body && body.facebook_post_id != null
+            ? String(body.facebook_post_id).trim()
+            : '';
+      if (!accessToken) {
+        json(res, 400, { ok: false, message: 'Falta accessToken.' });
+        return true;
+      }
+      const facebookEnlace = normalizeFacebookEnlace(rawEnlace);
+      if (!facebookEnlace) {
+        json(res, 400, {
+          ok: false,
+          message: 'Enlace de Facebook no válido. Usa la URL del post o el post_id (ej. 123456_789012).'
+        });
+        return true;
+      }
+
+      let userId;
+      try {
+        ({ userId } = await resolveFacebookJugador(accessToken));
+      } catch (e) {
+        const code = e && e.message;
+        if (code === 'not_facebook_jugador') {
+          json(res, 403, { ok: false, message: 'Vincula Facebook en Redes sociales.' });
+          return true;
+        }
+        if (code === 'no_meta_secrets') {
+          json(res, 503, { ok: false, message: 'Servidor sin credenciales Meta.' });
+          return true;
+        }
+        json(res, 401, { ok: false, reason: 'invalid_token', message: 'Sesión de Facebook no válida.' });
+        return true;
+      }
+
+      try {
+        const updated = await repo.updateFacebookEnlace(pubId, userId, facebookEnlace);
+        if (!updated) {
+          json(res, 404, {
+            ok: false,
+            message: 'No se pudo guardar el enlace (¿no es tu publicación o ya tenía enlace?).'
+          });
+          return true;
+        }
+        json(res, 200, { ok: true, facebook_enlace: facebookEnlace });
+      } catch (e) {
+        console.error('[comunidad] facebook-enlace:', e && e.message ? e.message : e);
+        json(res, 500, {
+          ok: false,
+          message:
+            'Error al guardar el enlace. ¿Ejecutaste sql/alter-publicaciones-facebook-enlace.sql en MySQL?'
+        });
       }
       return true;
     }

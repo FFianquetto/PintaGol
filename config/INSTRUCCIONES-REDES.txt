@@ -68,3 +68,19 @@ No uses solo `npx serve` u otro servidor estático: no existen las rutas /api ni
   • Instagram profesional: Instagram Graph API (cuenta Business/Creator + página de Facebook).
 
   Documentación: https://developers.facebook.com/docs/graph-api
+
+────────────────────────────────────────
+6) Comunidad: compartir en el muro del jugador
+────────────────────────────────────────
+  • La página comunidad.html debe incluir <div id="fb-root"></div> al inicio del body; sin eso el
+    diálogo FB.ui (Compartir) puede fallar.
+  • En localhost / 127.0.0.1 el proyecto usa el compartidor clásico de Facebook (ventana sharer.php),
+    no FB.ui con la URL local: los servidores de Meta no pueden leer http://localhost para la vista
+    previa y el diálogo del SDK suele quedarse cargando. Por eso en local no se rellena
+    facebook_enlace en MySQL (no hay post_id).
+  • El botón «Abrir Facebook» comparte la URL /share/comunidad/ID: el servidor genera HTML con meta
+    Open Graph (título, texto e imagen leídos de MySQL) para que el cuadro de Facebook muestre la vista previa.
+  • Tras publicar, el jugador usa «Abrir Facebook» en su tarjeta (clic directo). Script SQL:
+    sql/alter-publicaciones-facebook-enlace.sql si la base ya existía.
+  • No es posible publicar en el muro personal sin acción del usuario desde una app genérica; en
+    Página de Facebook haría falta Graph API con permisos de página y revisión de la app.

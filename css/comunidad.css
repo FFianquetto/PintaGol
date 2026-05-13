@@ -551,3 +551,54 @@ html, body {
 .comunidad-modal-btn:active {
   transform: scale(0.98);
 }
+
+/* Enlace / compartir en Facebook (diálogo oficial Meta) */
+.publicacion-fila-facebook {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+a.comunidad-fb-link {
+  color: #93c5fd;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a.comunidad-fb-link:hover {
+  color: #bfdbfe;
+}
+
+.comunidad-fb-hint {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.comunidad-btn-compartir-fb {
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.55) 0%, rgba(29, 78, 216, 0.75) 100%);
+  color: #eff6ff;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.comunidad-btn-compartir-fb:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.comunidad-btn-compartir-fb:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.comunidad-btn-compartir-fb:active:not(:disabled) {
+  transform: scale(0.98);
+}

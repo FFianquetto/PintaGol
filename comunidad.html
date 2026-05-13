@@ -10,13 +10,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body data-bgm="overture">
+  <!-- Requerido por el SDK de Meta para que FB.ui (Compartir) no se quede en carga infinita -->
+  <div id="fb-root"></div>
   <div id="comunidad-container">
     <canvas id="comunidad-canvas"></canvas>
 
     <div id="comunidad-overlay">
       <div id="comunidad-panel">
         <h2 id="comunidad-title">COMUNIDAD</h2>
-        <p class="comunidad-subtitulo">Publicaciones de jugadores</p>
+        <p class="comunidad-subtitulo">
+          Publicaciones de jugadores. Tras publicar, usa «Abrir Facebook» en tu tarjeta. En <strong>localhost</strong> se usa el compartidor clásico de Facebook (Meta no puede previsualizar URLs locales). Con un sitio <strong>HTTPS público</strong> puede guardarse el enlace «Ver en Facebook» en la base de datos.
+        </p>
 
         <p id="comunidad-aviso-facebook" class="comunidad-aviso-fb" hidden>
           Para publicar o comentar, vincula tu cuenta de Facebook en

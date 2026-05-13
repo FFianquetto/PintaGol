@@ -56,11 +56,25 @@
     });
   }
 
+  function setFacebookEnlace(pubId, accessToken, facebookEnlace) {
+    return fetch('/api/comunidad/publicaciones/' + pubId + '/facebook-enlace', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken: accessToken,
+        facebook_enlace: String(facebookEnlace || '').trim()
+      })
+    }).then(function (r) {
+      return jsonWithStatus(r);
+    });
+  }
+
   window.PintaGolComunidadApi = {
     listPublicaciones: listPublicaciones,
     createPublicacion: createPublicacion,
     deletePublicacion: deletePublicacion,
     listComentarios: listComentarios,
-    createComentario: createComentario
+    createComentario: createComentario,
+    setFacebookEnlace: setFacebookEnlace
   };
 })();

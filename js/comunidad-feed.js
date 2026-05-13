@@ -18,6 +18,15 @@
   var modalBorrarConfirm = null;
   var pendingBorrar = null;
 
+  function getMyUid() {
+    return meta.getLocalMetaUserId ? String(meta.getLocalMetaUserId() || '').trim() : '';
+  }
+
+  function isMiPublicacion(pub) {
+    var u = getMyUid();
+    return !!u && String(pub.meta_user_id) === u;
+  }
+
   function clearTokenIfUnauthorized(data) {
     if (!data) return;
     if (data._httpStatus === 401 || data.reason === 'invalid_token') {
@@ -57,6 +66,72 @@
     statusEl.textContent = msg || '';
     statusEl.className = 'comunidad-status' + (isErr ? ' comunidad-status-err' : '');
   }
+
+  function scrollToPublication(pubId) {
+    if (!pubId) return;
+    window.requestAnimationFrame(function () {
+      var el = document.getElementById('comunidad-pub-' + pubId);
+      if (el && el.scrollIntoView) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }
+
+  /* ----- Facebook: diálogo Compartir + guardar enlace (ver comunidad-meta-sdk.js) ----- */
+
+  /**
+   * Diálogo Compartir de Meta + PATCH del enlace si Facebook devuelve post_id.
+   */
+  function persistirEnlaceTrasCompartir(pubId, quote, accessToken) {
+    return new Promise(function (resolve) {
+      if (!meta.shareComunidadPublicacion || typeof FB === 'undefined') {
+        resolve();
+        return;
+      }
+      meta.shareComunidadPublicacion({ pubId: pubId, quote: quote || '' }, function (resp) {
+        var url = meta.facebookPermalinkFromPostId
+          ? meta.facebookPermalinkFromPostId(resp && resp.post_id)
+          : '';
+        if (url && accessToken) {
+          api.setFacebookEnlace(pubId, accessToken, url).finally(resolve);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  function recargarFeedYScroll(pubId) {
+    return cargarFeed().then(function () {
+      scrollToPublication(pubId);
+    });
+  }
+
+  function setStatusErrorFacebookCompartir() {
+    setStatus('No se pudo usar Facebook (inicio de sesión o ventanas emergentes bloqueadas).', true);
+  }
+
+  function onCompartirMuro(pub, btn) {
+    if (!meta.isFacebookLinked()) {
+      setStatus('Vincula Facebook en «Redes sociales».', true);
+      return;
+    }
+    if (btn) btn.disabled = true;
+    meta
+      .getAccessToken()
+      .then(function (tok) {
+        return persistirEnlaceTrasCompartir(pub.id, pub.cuerpo || '', tok);
+      })
+      .then(function () {
+        return recargarFeedYScroll(pub.id);
+      })
+      .catch(setStatusErrorFacebookCompartir)
+      .finally(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  /* ----- Comentarios ----- */
 
   function formatFecha(iso) {
     try {
@@ -191,6 +266,8 @@
     }
   }
 
+  /* ----- Tarjetas del feed ----- */
+
   function renderPublicacion(pub) {
     var article = document.createElement('article');
     article.className = 'publicacion';
@@ -207,9 +284,8 @@
     head.appendChild(autor);
     head.appendChild(fecha);
 
-    var myUid = meta.getLocalMetaUserId ? meta.getLocalMetaUserId() : '';
     var rowBorrar = null;
-    if (myUid && String(pub.meta_user_id) === String(myUid)) {
+    if (isMiPublicacion(pub)) {
       rowBorrar = document.createElement('div');
       rowBorrar.className = 'publicacion-fila-borrar';
       var delBtn = document.createElement('button');
@@ -238,6 +314,36 @@
       img.loading = 'lazy';
       fig.appendChild(img);
       cuerpo.appendChild(fig);
+    }
+
+    article.id = 'comunidad-pub-' + pub.id;
+
+    var filaFb = document.createElement('div');
+    filaFb.className = 'publicacion-fila-facebook';
+    if (pub.facebook_enlace) {
+      var aFb = document.createElement('a');
+      aFb.href = pub.facebook_enlace;
+      aFb.className = 'comunidad-fb-link';
+      aFb.target = '_blank';
+      aFb.rel = 'noopener noreferrer';
+      aFb.textContent = 'Ver en Facebook';
+      filaFb.appendChild(aFb);
+    } else if (isMiPublicacion(pub)) {
+      var hintFb = document.createElement('span');
+      hintFb.className = 'comunidad-fb-hint';
+      hintFb.textContent =
+        meta.isFacebookShareLocalhost && meta.isFacebookShareLocalhost()
+          ? 'Compartir en tu muro (en localhost no se guarda el enlace en la base; con un sitio HTTPS público sí): '
+          : '¿Publicar también en tu muro? ';
+      var btnFb = document.createElement('button');
+      btnFb.type = 'button';
+      btnFb.className = 'comunidad-btn-compartir-fb';
+      btnFb.textContent = 'Abrir Facebook';
+      btnFb.addEventListener('click', function () {
+        onCompartirMuro(pub, btnFb);
+      });
+      filaFb.appendChild(hintFb);
+      filaFb.appendChild(btnFb);
     }
 
     var nCom = typeof pub.num_comentarios === 'number' ? pub.num_comentarios : 0;
@@ -274,12 +380,15 @@
     article.appendChild(head);
     if (rowBorrar) article.appendChild(rowBorrar);
     article.appendChild(cuerpo);
+    if (filaFb.firstChild) article.appendChild(filaFb);
     article.appendChild(toggle);
     article.appendChild(panel);
 
     bindComentariosUi(article, pub);
     return article;
   }
+
+  /* ----- Lista y carga del feed ----- */
 
   function renderLista(publicaciones) {
     clearList();
@@ -293,11 +402,18 @@
     publicaciones.forEach(function (pub) {
       listEl.appendChild(renderPublicacion(pub));
     });
+    try {
+      var params = new URLSearchParams(window.location.search || '');
+      var qp = params.get('pub');
+      if (qp) scrollToPublication(qp);
+    } catch (e) {
+      /* no-op */
+    }
   }
 
   function cargarFeed() {
     setStatus('Cargando…');
-    api
+    return api
       .listPublicaciones()
       .then(function (data) {
         if (!data || data.ok === false) {
@@ -320,8 +436,7 @@
   }
 
   function onEliminarPublicacion(pub, article) {
-    var myUid = meta.getLocalMetaUserId ? meta.getLocalMetaUserId() : '';
-    if (!myUid || String(pub.meta_user_id) !== String(myUid)) {
+    if (!isMiPublicacion(pub)) {
       setStatus('Solo puedes borrar publicaciones tuyas.', true);
       return;
     }
@@ -332,8 +447,8 @@
     if (!pendingBorrar) return;
     var pub = pendingBorrar.pub;
     var article = pendingBorrar.article;
-    var uid = meta.getLocalMetaUserId ? meta.getLocalMetaUserId() : '';
-    if (!uid || String(pub.meta_user_id) !== String(uid)) {
+    var uid = getMyUid();
+    if (!uid || String(pub.meta_user_id) !== uid) {
       cerrarModalBorrar();
       setStatus('No se pudo verificar el autor de la publicación.', true);
       return;
@@ -376,19 +491,28 @@
         return api.createPublicacion(token, texto, fileInput);
       })
       .then(function (data) {
+        if (!data || typeof data !== 'object') return null;
         clearTokenIfUnauthorized(data);
-        if (!data || !data.ok) {
+        if (!data.ok) {
           setStatus((data && data.message) || 'No se pudo publicar.', true);
-          return;
+          return null;
         }
+        var newId = data.id;
         if (textoInput) textoInput.value = '';
         if (fileInput) fileInput.value = '';
         syncFotoNombre();
-        setStatus('¡Publicado!');
-        cargarFeed();
+        /* No abrir FB.ui aquí: tras fetch el navegador ya no cuenta “gesto de usuario” y el diálogo de Meta se queda cargando. */
+        return newId;
+      })
+      .then(function (newId) {
+        if (newId == null) return;
+        setStatus(
+          '¡Publicado! Pulsa «Abrir Facebook» debajo del texto: en localhost se abre el compartir clásico; el enlace en la base se guarda al usar un dominio público HTTPS.'
+        );
+        return recargarFeedYScroll(newId);
       })
       .catch(function () {
-        setStatus('Debes iniciar sesión con Facebook en la ventana emergente.', true);
+        setStatus('No se pudo publicar. Revisa sesión de Facebook o la conexión.', true);
       })
       .finally(function () {
         btnPublicar.disabled = false;

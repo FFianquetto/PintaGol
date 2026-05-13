@@ -15,6 +15,8 @@
   var SS_TOKEN_UID = 'pintagol_meta_token_user';
   var SS_TOKEN_TS = 'pintagol_meta_token_ts';
   var TOKEN_MAX_MS = 45 * 60 * 1000;
+  /** Debe coincidir con FB.init en initSdk. */
+  var GRAPH_SDK_VERSION = 'v19.0';
 
   function isFacebookLinked() {
     try {
@@ -91,6 +93,14 @@
     });
   }
 
+  /** Meta inyecta el diálogo aquí; sin esto FB.ui suele quedarse en carga. */
+  function ensureFbRoot() {
+    if (document.getElementById('fb-root')) return;
+    var root = document.createElement('div');
+    root.id = 'fb-root';
+    document.body.insertBefore(root, document.body.firstChild);
+  }
+
   /**
    * @param {(err: Error | null) => void} onReady
    */
@@ -110,11 +120,12 @@
             onReady(new Error('no_fb'));
             return;
           }
+          ensureFbRoot();
           FB.init({
             appId: appId,
             cookie: true,
             xfbml: false,
-            version: 'v19.0'
+            version: GRAPH_SDK_VERSION
           });
           onReady(null);
         };
@@ -134,6 +145,86 @@
         onReady(new Error('network'));
       });
   }
+
+  /* ----- Compartir publicación de Comunidad en el muro ----- */
+
+  /**
+   * Meta no puede hacer scraping de localhost (ni muchas IPs locales): FB.ui con ese href suele
+   * quedarse en carga infinita. En esos hosts usamos el compartidor clásico (sin post_id).
+   */
+  function isFacebookShareLocalhost() {
+    var h = (window.location.hostname || '').toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
+  }
+
+  function openClassicFacebookSharer(pageUrl, quote) {
+    var u = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(pageUrl);
+    if (quote && String(quote).trim()) {
+      u += '&quote=' + encodeURIComponent(String(quote).trim().slice(0, 500));
+    }
+    try {
+      window.open(u, 'fb_sharer', 'width=640,height=520,scrollbars=yes,noopener,noreferrer');
+    } catch (e) {
+      window.location.href = u;
+    }
+  }
+
+  function facebookPermalinkFromPostId(postId) {
+    if (postId == null) return '';
+    var s = String(postId)
+      .trim()
+      .replace(/\s/g, '');
+    if (!s) return '';
+    var idx = s.indexOf('_');
+    if (idx <= 0 || idx === s.length - 1) return '';
+    var a = s.slice(0, idx);
+    var b = s.slice(idx + 1);
+    if (!/^\d+$/.test(a) || !/^\d+$/.test(b)) return '';
+    return 'https://www.facebook.com/' + a + '/posts/' + b;
+  }
+
+  function shareComunidadPublicacion(opts, callback) {
+    opts = opts || {};
+    var pubId = opts.pubId;
+    var quote = opts.quote != null ? String(opts.quote) : '';
+
+    function done(resp) {
+      if (typeof callback === 'function') callback(resp || {});
+    }
+
+    if (!pubId) {
+      done({});
+      return;
+    }
+
+    ensureFbRoot();
+    var origin = window.location.protocol + '//' + window.location.host;
+    var href = origin + '/share/comunidad/' + encodeURIComponent(String(pubId));
+
+    if (isFacebookShareLocalhost()) {
+      openClassicFacebookSharer(href, quote);
+      done({});
+      return;
+    }
+
+    if (typeof FB === 'undefined') {
+      openClassicFacebookSharer(href, quote);
+      done({});
+      return;
+    }
+
+    /* Solo href: el parámetro quote a veces bloquea el diálogo o exige permisos extra. */
+    try {
+      FB.ui({ method: 'share', href: href }, function (response) {
+        done(response || {});
+      });
+    } catch (e) {
+      openClassicFacebookSharer(href, quote);
+      done({});
+    }
+  }
+
+  /* ----- Token para la API del juego ----- */
 
   /**
    * Token para API: usa caché de sesión si coincide con pintagol_meta_user_id;
@@ -183,6 +274,9 @@
     isFacebookLinked: isFacebookLinked,
     primeFbSessionIfConnected: primeFbSessionIfConnected,
     invalidateFbSessionCache: invalidateFbSessionCache,
-    getLocalMetaUserId: getLocalMetaUserId
+    getLocalMetaUserId: getLocalMetaUserId,
+    shareComunidadPublicacion: shareComunidadPublicacion,
+    facebookPermalinkFromPostId: facebookPermalinkFromPostId,
+    isFacebookShareLocalhost: isFacebookShareLocalhost
   };
 })();

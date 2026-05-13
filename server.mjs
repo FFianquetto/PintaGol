@@ -9,6 +9,7 @@ import { createMysqlPool } from './db/mysql-pool.mjs';
 import { createJugadoresRepo } from './db/jugadores-repo.mjs';
 import { httpsGetJson, assertUserTokenForApp, fetchMetaMe } from './lib/meta-graph.mjs';
 import { createComunidadHandlers } from './api/comunidad-handlers.mjs';
+import { handleComunidadShareOgIfNeeded } from './api/comunidad-share-og.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -606,6 +607,21 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/oauth/meta/callback' && req.method === 'GET') {
       return handleMetaCallback(req, res, u);
     }
+    if (u.pathname.match(/^\/share\/comunidad\/\d+$/) && req.method === 'GET') {
+      (async () => {
+        try {
+          const done = await handleComunidadShareOgIfNeeded(req, res, u, mysqlPool);
+          if (!done) serveStatic(req, res);
+        } catch (e) {
+          console.error('[share-og]', e && e.message ? e.message : e);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end('<!DOCTYPE html><html lang="es"><body><p>Error al generar la vista previa.</p></body></html>');
+          }
+        }
+      })();
+      return;
+    }
     if (u.pathname.startsWith('/api/comunidad/')) {
       if (!comunidadHandlers) {
         res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -699,6 +715,6 @@ server.listen(PORT, () => {
       );
   }
   if (comunidadHandlers) {
-    console.log('[comunidad] API activa (/api/comunidad/*). Imágenes en uploads/comunidad/.');
+    console.log('[comunidad] API activa (/api/comunidad/*). Vista previa OG: GET /share/comunidad/:id. Imágenes en uploads/comunidad/.');
   }
 });

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS publicaciones (
   meta_user_id VARCHAR(64) NOT NULL COMMENT 'Autor: FK a jugadores.meta_user_id',
   cuerpo TEXT NOT NULL COMMENT 'Texto de la publicación',
   imagen_url VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Ruta bajo /uploads/comunidad/ (vacío si no hay foto)',
+  facebook_enlace VARCHAR(768) NOT NULL DEFAULT '' COMMENT 'URL del post en Facebook (tras compartir)',
   creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_pub_creado (creado_en DESC),
